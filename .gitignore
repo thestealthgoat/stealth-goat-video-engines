@@ -1,0 +1,17 @@
+# machine-only settings
+local.json
+# generated
+__pycache__/
+*.pyc
+node_modules/
+logo/srenv/
+.DS_Store
+**/out/
+**/_parts/
+**/_cache/
+tests/out/
+*.orig
+# super-resolution models: downloaded per machine, not committed
+resources/models/*.pb
+# your own profiles stay out of git unless you mean to share them
+profiles/*/sample_card.png

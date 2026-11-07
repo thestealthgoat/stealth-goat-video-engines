@@ -1,0 +1,151 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// 3D logo renderer — same SVG→extrude approach as 3dsvg (three.js SVGLoader + ExtrudeGeometry),
+// but every fill keeps its own colour, stacked paths sit in layers, and output is transparent.
+import * as THREE from 'three';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+let renderer, scene, camera, pivot, root, maxDim = 1;
+
+function setup(w, h) {
+  if (renderer) { renderer.dispose(); renderer.domElement.remove(); }
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(w, h);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  document.body.appendChild(renderer.domElement);
+  scene = new THREE.Scene();
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.55;
+  const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(-4, 6, 8); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.9); rim.position.set(6, 2, -6); scene.add(rim);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+  camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 1000);
+  pivot = new THREE.Group(); scene.add(pivot);
+}
+
+function parseColor(style) {
+  const c = new THREE.Color().setStyle(style.fill);
+  return c;
+}
+
+window.build = function (svgText, opt = {}) {
+  const depthRatio = opt.depth ?? 0.08;          // extrusion as a fraction of the logo's longest side
+  const bevelRatio = opt.bevel ?? 0.0022;
+  const W = opt.width ?? 1920, H = opt.height ?? 1080;
+  setup(W, H);
+  const data = new SVGLoader().parse(svgText);
+  // collect filled shapes in paint order
+  const items = [];
+  for (const p of data.paths) {
+    const st = p.userData?.style || {};
+    if (!st.fill || st.fill === 'none' || st.fill === 'transparent') continue;
+    if (st.fillOpacity !== undefined && +st.fillOpacity === 0) continue;
+    if (st.opacity !== undefined && +st.opacity === 0) continue;
+    const shapes = SVGLoader.createShapes(p);
+    if (shapes.length) items.push({ shapes, color: parseColor(st) });
+  }
+  // opt.dropBackground (render3d.py --drop-bg): drop full-canvas background rectangles (export artifacts), i.e. a
+  // filled rectangle without holes that covers the whole viewBox (or width x height when there is none), as long as
+  // other shapes remain. Off by default: a full-bleed plate can be part of the logo (a square badge traced by vectorize).
+  const vb = svgText.match(/viewBox\s*=\s*["']\s*([\d.\-]+)[\s,]+([\d.\-]+)[\s,]+([\d.\-]+)[\s,]+([\d.\-]+)/);
+  let canvas = vb ? { x: +vb[1], y: +vb[2], w: +vb[3], h: +vb[4] } : null;
+  if (!canvas) {
+    const tag = (svgText.match(/<svg\b[^>]*>/) || [''])[0];
+    const wm = tag.match(/\swidth\s*=\s*["']\s*([\d.]+)(px)?\s*["']/), hm = tag.match(/\sheight\s*=\s*["']\s*([\d.]+)(px)?\s*["']/);
+    if (wm && hm) canvas = { x: 0, y: 0, w: +wm[1], h: +hm[1] };
+  }
+  let dropped = 0;
+  if (opt.dropBackground && canvas && canvas.w > 0 && canvas.h > 0) {
+    const tx = 0.01 * canvas.w, ty = 0.01 * canvas.h;
+    const isBackground = (it) => {
+      if (it.shapes.length !== 1 || it.shapes[0].holes.length) return false;
+      const pts = it.shapes[0].getPoints(4), b = new THREE.Box2().setFromPoints(pts), sz = b.getSize(new THREE.Vector2());
+      const covers = b.min.x <= canvas.x + tx && b.min.y <= canvas.y + ty &&
+        b.max.x >= canvas.x + canvas.w - tx && b.max.y >= canvas.y + canvas.h - ty;
+      return covers && Math.abs(THREE.ShapeUtils.area(pts)) >= 0.98 * sz.x * sz.y;
+    };
+    const keep = items.filter(it => !isBackground(it));
+    if (keep.length && keep.length < items.length) { dropped = items.length - keep.length; items.splice(0, items.length, ...keep); }
+  }
+  // bounds
+  const bb = new THREE.Box2();
+  for (const it of items) for (const s of it.shapes) for (const pt of s.getPoints(4)) bb.expandByPoint(pt);
+  const size = new THREE.Vector2(); bb.getSize(size);
+  maxDim = Math.max(size.x, size.y);
+  const depth = depthRatio * maxDim, bevel = bevelRatio * maxDim;
+  // a new layer starts whenever the fill colour changes (traced logos stack whole colour layers)
+  let L = 0; items.forEach((it, i) => { if (i && !it.color.equals(items[i - 1].color)) L++; it.layer = L; });
+  const n = items.length;
+  const layerStep = opt.layered === false ? 0 : Math.min(0.004 * maxDim, (0.03 * maxDim) / Math.max(L, 1));
+  root = new THREE.Group();
+  const matCache = new Map();
+  const mats = (c) => {
+    const k = c.getHexString(); if (matCache.has(k)) return matCache.get(k);
+    const hsl = {}; c.getHSL(hsl);
+    const neutralGray = hsl.s < 0.08 && hsl.l > 0.25 && hsl.l < 0.85;     // armour/sword greys read as metal
+    const face = new THREE.MeshPhysicalMaterial({ color: c, roughness: neutralGray ? 0.3 : 0.34,
+      metalness: neutralGray ? 0.45 : 0.05, clearcoat: neutralGray ? 0.2 : 0.55, clearcoatRoughness: 0.2 });
+    const side = face.clone(); side.color = c.clone().multiplyScalar(neutralGray ? 0.8 : 0.62);
+    const m = [face, side]; matCache.set(k, m); return m;
+  };
+  items.forEach((it, i) => {
+    const geo = new THREE.ExtrudeGeometry(it.shapes, {
+      depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelOffset: -bevel,
+      bevelSegments: items.length > 100 ? 2 : 4, curveSegments: opt.curveSegments ?? (items.length > 100 ? 3 : 16) });
+    const mesh = new THREE.Mesh(geo, mats(it.color));
+    mesh.position.z = it.layer * layerStep;
+    root.add(mesh);
+  });
+  // SVG y-down → flip, centre
+  root.scale.set(1, -1, 1);
+  const box = new THREE.Box3().setFromObject(root);
+  const ctr = box.getCenter(new THREE.Vector3());
+  root.position.sub(ctr.multiply(new THREE.Vector3(1, 1, 1)));
+  const s = 4 / maxDim; pivot.scale.setScalar(s); pivot.add(root);
+  // re-centre after scale
+  const b2 = new THREE.Box3().setFromObject(pivot); const c2 = b2.getCenter(new THREE.Vector3());
+  root.position.x -= c2.x / s; root.position.y -= c2.y / s; root.position.z -= c2.z / s;
+  frame(opt.fill ?? 0.78);
+  return { paths: n, maxDim, layerStep, dropped };
+};
+
+function frame(fill) {
+  // fit the logo so its widest dimension fills `fill` of the frame (any rotation keeps it inside)
+  const b = new THREE.Box3().setFromObject(pivot); const sz = b.getSize(new THREE.Vector3());
+  const vfov = THREE.MathUtils.degToRad(camera.fov);
+  const distH = (sz.y / fill) / (2 * Math.tan(vfov / 2));
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+  const r = Math.hypot(sz.x, sz.z);
+  const distW = (Math.max(sz.x, r * 0.98) / fill) / (2 * Math.tan(hfov / 2));
+  camera.position.set(0, 0, Math.max(distH, distW) + sz.z);
+  camera.lookAt(0, 0, 0);
+}
+
+window.renderAt = function (rx, ry) {
+  pivot.rotation.set(rx, ry, 0);
+  renderer.render(scene, camera);
+  return renderer.domElement.toDataURL('image/png');
+};
+
+window.exportGLB = async function () {
+  pivot.rotation.set(0, 0, 0);
+  const ab = await new GLTFExporter().parseAsync(pivot, { binary: true });
+  const CH = 4 << 20;
+  for (let o = 0, i = 0; o < ab.byteLength; o += CH, i++)
+    await fetch('/upload?part=' + i, { method: 'POST', body: ab.slice(o, Math.min(o + CH, ab.byteLength)) });
+  let verts = 0; pivot.traverse(m => { if (m.isMesh) verts += m.geometry.attributes.position.count; });
+  return ab.byteLength + ' bytes, ' + verts + ' verts';
+};
+window.ready = true;
+</script></body></html>

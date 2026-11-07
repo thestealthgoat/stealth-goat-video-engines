@@ -1,0 +1,167 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// Logo motion graphics: 3D logo (engine.js) + 2D layer (text, light sweep, panels, sponsor art), rendered
+// deterministically frame by frame with a transparent background. Templates: intro, outro, bug_in/bug_loop/bug_out,
+// stinger, presented. Brand fonts and colours arrive in the setup() config (cfg.fonts: family -> font URL,
+// cfg.colors: primary / accent / text), so this page holds no brand values.
+import * as THREE from 'three';
+import { makeRenderer, makeScene, buildLogo } from './engine.js';
+
+let W, H, R, scene, cam, logo, out, ctx, tmp, tctx, cfg, sponsorImg = null, tpl, PRIMARY, ACCENT, TXT;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const eOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+const eInCubic = (x) => x * x * x;
+const eInOut = (x) => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const eOutBack = (x) => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+
+// Every font in cfg.fonts is required: if one does not load, setup() throws (motion.py then exits non-zero)
+// instead of the text silently falling back to the browser's default serif.
+async function loadFonts(fonts) {
+  const failed = [];
+  for (const [n, u] of Object.entries(fonts || {})) {
+    const ff = new FontFace(n, `url(${u})`);
+    try { await ff.load(); document.fonts.add(ff); } catch (e) { failed.push(`${n} (${e && e.message || e})`); }
+  }
+  await document.fonts.ready;
+  if (failed.length) throw new Error('font load failed: ' + failed.join(', '));
+}
+
+window.setup = async function (c) {
+  cfg = c; W = c.width || 1920; H = c.height || 1080;
+  const col = c.colors || {}; PRIMARY = col.primary; ACCENT = col.accent; TXT = col.text;
+  await loadFonts(c.fonts);
+  R = makeRenderer(W, H); scene = makeScene(R);
+  cam = new THREE.PerspectiveCamera(28, W / H, 0.1, 1000); cam.position.set(0, 0, 12); cam.lookAt(0, 0, 0);
+  logo = buildLogo(c.svg, { depth: c.depth ?? 0.03 }); scene.add(logo);
+  out = document.createElement('canvas'); out.width = W; out.height = H; document.body.appendChild(out); ctx = out.getContext('2d');
+  tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; tctx = tmp.getContext('2d');
+  if (c.sponsor) { sponsorImg = new Image(); sponsorImg.src = c.sponsor; await sponsorImg.decode(); }
+  tpl = TEMPLATES[c.template];
+  return { duration: c.dur ?? tpl.dur, cut: tpl.cut ?? null };
+};
+
+// visible world size on the z=0 plane
+function vis() { const vh = 2 * cam.position.z * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)); return { w: vh * cam.aspect, h: vh }; }
+
+// place the logo: cx, cy = centre in frame fractions (0..1, y down); box = max width/height as frame fractions
+function placeLogo(s) {
+  const v = vis(), sz = logo.userData.size;
+  const k = Math.min((s.bw * v.w) / sz.w, (s.bh * v.h) / sz.h) * (s.scale ?? 1);
+  logo.scale.setScalar(Math.max(k, 1e-4));
+  logo.position.set((s.cx - 0.5) * v.w, (0.5 - s.cy) * v.h, s.z ?? 0);
+  logo.rotation.set(s.rx ?? 0, s.ry ?? 0, s.rz ?? 0);
+}
+
+function drawText(t) {
+  ctx.save(); ctx.globalAlpha = clamp(t.op ?? 1);
+  ctx.font = `${t.size}px ${t.font}`; ctx.fillStyle = t.color; ctx.textAlign = t.align || 'center'; ctx.textBaseline = 'middle';
+  if (t.spacing) ctx.letterSpacing = t.spacing + 'px';
+  if (t.shadow !== false) { ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = t.size * 0.12; ctx.shadowOffsetY = t.size * 0.04; }
+  ctx.fillText(t.str, t.x * W, t.y * H); ctx.restore();
+}
+
+// light sweep across whatever is on the logo layer (p: 0..1 across the frame)
+function glint(p, alpha = 0.55) {
+  if (p <= 0 || p >= 1) return;
+  tctx.save(); tctx.globalCompositeOperation = 'source-atop';
+  const x = -0.3 * W + p * 1.6 * W, wdt = 0.12 * W;
+  const g = tctx.createLinearGradient(x - wdt, 0, x + wdt, H * 0.25);
+  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, `rgba(255,255,255,${alpha})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+  tctx.fillStyle = g; tctx.fillRect(0, 0, W, H); tctx.restore();
+}
+
+window.frameAt = function (t) {
+  ctx.clearRect(0, 0, W, H);
+  const f = tpl.fn(t, cfg);
+  (f.under || []).forEach((p) => p(ctx));
+  if (f.logo && (f.logo.op ?? 1) > 0.001) {
+    placeLogo(f.logo); R.render(scene, cam);
+    tctx.clearRect(0, 0, W, H); tctx.drawImage(R.domElement, 0, 0);
+    if (f.glint != null) glint(f.glint);
+    ctx.save(); ctx.globalAlpha = clamp(f.logo.op ?? 1); ctx.drawImage(tmp, 0, 0); ctx.restore();
+  }
+  (f.over || []).forEach((p) => p(ctx));
+  (f.texts || []).forEach(drawText);
+  return out.toDataURL('image/png');
+};
+
+const TEMPLATES = {
+  // logo slams in from behind the camera with a turn (never shows its back), lands with a small bounce, light sweep, slow drift.
+  // cfg.place = {cx, cy, bw, bh} (frame fractions) sets where it lands; cfg.dur sets the length (holds after landing).
+  slam: { dur: 2.0, fn: (t, c) => {
+    const p = c.place || { cx: 0.5, cy: 0.45, bw: 0.6, bh: 0.45 }, L = 0.42;
+    const e = eOutCubic(seg(t, 0, L)), k = t > L ? t - L : 0;
+    const bounce = t > L ? Math.exp(-k * 9) * Math.sin(k * 38) * 0.05 : 0;
+    return {
+      logo: { cx: p.cx, cy: p.cy, bw: p.bw, bh: p.bh, scale: 2.8 - 1.8 * e + bounce,
+              ry: (1 - e) * -1.25 + Math.sin(k * 1.3) * 0.10, rx: (1 - e) * 0.3, rz: (1 - e) * 0.22, op: seg(t, 0, 0.1) },
+      glint: seg(t, 0.55, 1.25),
+    };
+  } },
+  // 4 s: logo pushes in with a turn, settles, light sweep; holds on the last frame
+  intro: { dur: 4, fn: (t, c) => {
+    const a = seg(t, 0, 1.4), e = eOutBack(a);
+    return {
+      logo: { cx: 0.5, cy: c.text1 ? 0.45 : 0.5, bw: 0.7, bh: 0.55, scale: 0.35 + 0.65 * e, ry: (1 - eOutCubic(a)) * -1.3,
+              rx: (1 - eOutCubic(a)) * 0.25, op: seg(t, 0, 0.35) },
+      glint: seg(t, 1.5, 2.4),
+      texts: c.text1 ? [{ str: c.text1, font: 'Head', size: 72, color: TXT, x: 0.5, y: 0.78 + (1 - eOutCubic(seg(t, 1.6, 2.2))) * 0.03,
+                          op: seg(t, 1.6, 2.2), spacing: 6 }] : [],
+    };
+  } },
+  // 6 s end card: logo drops in, two text lines, sweep, everything fades out at the end
+  outro: { dur: 6, fn: (t, c) => {
+    const a = eOutCubic(seg(t, 0, 1.0)), fade = 1 - seg(t, 5.2, 6);
+    const l1 = eOutCubic(seg(t, 0.9, 1.5)), l2 = eOutCubic(seg(t, 1.2, 1.8));
+    return {
+      logo: { cx: 0.5, cy: 0.38 - (1 - a) * 0.06, bw: 0.58, bh: 0.42, ry: Math.sin(t * 1.1) * 0.12 * a, op: a * fade },
+      glint: seg(t, 2.0, 2.9),
+      texts: [
+        c.text1 && { str: c.text1, font: 'Head', size: 84, color: TXT, x: 0.5, y: 0.70 + (1 - l1) * 0.03, op: l1 * fade, spacing: 8 },
+        c.text2 && { str: c.text2, font: 'BodySB', size: 44, color: c.accent || ACCENT, x: 0.5, y: 0.79 + (1 - l2) * 0.03, op: l2 * fade, spacing: 2 },
+      ].filter(Boolean),
+    };
+  } },
+  // corner bug in three clips (bottom-right, inside the safe margin)
+  bug_in: { dur: 1.0, fn: (t) => { const a = seg(t, 0, 0.8); return { logo: bugPos(eOutBack(a), (1 - eOutCubic(a)) * 2.4, seg(t, 0, 0.25)), glint: seg(t, 0.55, 1.0) }; } },
+  bug_loop: { dur: 6, fn: (t) => ({ logo: bugPos(1, 0.22 * Math.sin((t / 6) * 2 * Math.PI), 1), glint: seg(t, 3.0, 3.8) }) },
+  bug_out: { dur: 0.8, fn: (t) => { const a = eInCubic(seg(t, 0, 0.7)); return { logo: bugPos(1 - a, a * 1.8, 1 - seg(t, 0.45, 0.8)) }; } },
+  // 1.2 s transition: primary-colour panel + accent edge wipe across, logo hits centre; frame fully covered at the cut point
+  stinger: { dur: 1.2, cut: 0.55, fn: (t) => {
+    const inP = eInOut(seg(t, 0, 0.5)), outP = eInOut(seg(t, 0.68, 1.2));
+    const x0 = (1 - inP) * 1.15 * W - outP * 1.15 * W;              // panel left edge
+    const panel = (cx) => { cx.save(); cx.fillStyle = PRIMARY; cx.beginPath(); cx.moveTo(x0, 0); cx.lineTo(x0 + 1.15 * W, 0);
+      cx.lineTo(x0 + 1.15 * W - 0.15 * W, H); cx.lineTo(x0 - 0.15 * W, H); cx.closePath(); cx.fill();
+      cx.fillStyle = ACCENT; const e = 0.025 * W;                         // accent leading and trailing edges
+      [[x0 - e, x0], [x0 + 1.15 * W, x0 + 1.15 * W + e]].forEach(([a, b]) => { cx.beginPath(); cx.moveTo(a, 0); cx.lineTo(b, 0); cx.lineTo(b - 0.15 * W, H); cx.lineTo(a - 0.15 * W, H); cx.closePath(); cx.fill(); });
+      cx.restore(); };
+    const lp = seg(t, 0.2, 0.62), lo = seg(t, 0.7, 1.0);
+    return { under: [panel], logo: { cx: 0.5 + outP * -0.9, cy: 0.5, bw: 0.55, bh: 0.45, scale: 0.4 + 0.6 * eOutBack(lp) + lo * 0.25,
+             ry: (1 - eOutCubic(lp)) * 1.6, op: seg(t, 0.2, 0.3) * (1 - lo) }, glint: seg(t, 0.45, 0.75) };
+  } },
+  // 5 s lower third: primary-colour bar wipes on, our logo pops, PRESENTED BY + sponsor logo; wipes off
+  presented: { dur: 5, fn: (t, c) => {
+    const inP = eOutCubic(seg(t, 0, 0.6)), outP = eInCubic(seg(t, 4.3, 4.9));
+    const bx = 0.05, by = 0.76, bw = 0.52, bh = 0.15, vis = inP * (1 - outP);
+    const bar = (cx) => { if (vis <= 0) return; cx.save(); cx.fillStyle = PRIMARY; cx.globalAlpha = 0.94;
+      cx.fillRect(bx * W, by * H, bw * W * vis, bh * H); cx.globalAlpha = 1; cx.fillStyle = ACCENT; cx.fillRect(bx * W, (by + bh) * H - 6, bw * W * vis, 6); cx.restore(); };
+    const sp = (cx) => { if (!sponsorImg) return; const o = seg(t, 0.9, 1.4) * (1 - seg(t, 4.1, 4.4)); if (o <= 0) return;
+      const boxW = 0.2 * W, boxH = 0.1 * H, s = Math.min(boxW / sponsorImg.width, boxH / sponsorImg.height);
+      const w = sponsorImg.width * s, h = sponsorImg.height * s; cx.save(); cx.globalAlpha = o;
+      cx.drawImage(sponsorImg, (bx + bw - 0.015) * W - w, (by + bh / 2) * H - h / 2, w, h); cx.restore(); };
+    const lo = eOutBack(seg(t, 0.35, 0.95)) * (1 - seg(t, 4.0, 4.35));
+    return { under: [bar], over: [sp],
+      logo: { cx: bx + 0.085, cy: by + bh / 2, bw: 0.13, bh: bh * 0.78, scale: Math.max(lo, 0.001), ry: (1 - seg(t, 0.35, 0.95)) * 1.2, op: lo > 0.01 ? 1 : 0 },
+      glint: seg(t, 1.2, 1.9),
+      texts: [{ str: c.text1 || 'PRESENTED BY', font: 'Body', size: 40, color: TXT, x: bx + 0.19, y: by + bh / 2, align: 'left',
+                op: seg(t, 0.7, 1.1) * (1 - seg(t, 4.1, 4.4)), spacing: 3, shadow: false }] };
+  } },
+};
+function bugPos(scale, ry, op) { return { cx: 0.87, cy: 0.855, bw: 0.17, bh: 0.13, scale: Math.max(scale, 0.001), ry, op }; }
+window.ready = true;
+</script></body></html>
