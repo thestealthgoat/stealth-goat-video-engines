@@ -20,8 +20,14 @@ an output.
 Verify (runs after master/rewrap, or on its own): decode errors in the first and last minute (--full-verify:
 the whole file), and the duration against the inputs (tolerance --tol seconds). Prints VERIFY_OK / VERIFY_FAIL.
 The Mac is kept awake (caffeinate) while it runs. ffmpeg is looked up in the usual install places, then PATH.
-"""
-import argparse, datetime as dt, os, shlex, shutil, subprocess, sys
+
+Log protocol (what a script or Claude can wait on): every run starts "=== START <mode>" and ends "=== DONE <mode>"
+(exit 0) or "=== FAILED <mode>" (exit non-zero). Before a FAILED line there is always at least one failure line:
+ENCODE_FAIL or VERIFY_FAIL (master), REWRAP_FAIL or VERIFY_FAIL (rewrap), COPY_FAIL (copy-verify), VERIFY_FAIL
+(verify). A problem that stops the run before or instead of ffmpeg (output exists without --force, output is an
+input, no encode preset in the profile, no ffmpeg, an unreadable concat list, ...) logs "FATAL: <reason>" and then
+"<failure line> FATAL: <reason>"."""
+import argparse, datetime as dt, os, shlex, shutil, subprocess, sys, traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -40,6 +46,18 @@ FFMPEG_CANDIDATES = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "~/Shu
 
 class Log(offload.Log):
     pass
+
+
+# the line every failed run logs before "=== FAILED <mode>" (see the log protocol above)
+FAIL_MARK = {"master": "ENCODE_FAIL", "rewrap": "REWRAP_FAIL", "copy-verify": "COPY_FAIL", "verify": "VERIFY_FAIL"}
+
+
+def log_fatal(log, mode, why):
+    """A problem that stops the run: 'FATAL: <why>' plus the mode's failure line, both in the log."""
+    why = str(why)
+    why = why[len("FATAL:"):].strip() if why.startswith("FATAL:") else why
+    log(f"FATAL: {why}")
+    log(f"{FAIL_MARK[mode]} FATAL: {why} {now()}")
 
 
 def now():
@@ -341,6 +359,29 @@ def do_copy_verify(a, log):
     return 1 if bad else 0
 
 
+def run_mode(a, log):
+    if a.mode == "copy-verify":
+        return do_copy_verify(a, log)
+    ff = find_ffmpeg()
+    if not ff:
+        raise SystemExit("no ffmpeg found (install it with Homebrew, or Shutter Encoder)")
+    fp = find_ffprobe(ff)
+    if not fp:
+        raise SystemExit("no ffprobe next to ffmpeg or on PATH")
+    log(f"ffmpeg: {ff}")
+    if a.mode == "master":
+        return do_master(a, ff, fp, log)
+    if a.mode == "rewrap":
+        return do_rewrap(a, ff, fp, log)
+    rc = 0
+    for f in a.inputs:
+        if not verify(ff, fp, os.path.abspath(os.path.expanduser(f)),
+                      [os.path.abspath(os.path.expanduser(x)) for x in (a.like or [])],
+                      a.full_verify, a.tol, log, a.expect):
+            rc = 1
+    return rc
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -382,28 +423,20 @@ def main(argv=None):
     log = Log(log_path)
     awake = offload.keep_awake(not a.no_caffeinate)
     log(f"=== START {a.mode} {now()} ===")
+    rc = 1
     try:
-        if a.mode == "copy-verify":
-            rc = do_copy_verify(a, log)
-        else:
-            ff = find_ffmpeg()
-            if not ff:
-                log("FATAL: no ffmpeg found (install it with Homebrew, or Shutter Encoder)"); return 1
-            fp = find_ffprobe(ff)
-            if not fp:
-                log("FATAL: no ffprobe next to ffmpeg or on PATH"); return 1
-            log(f"ffmpeg: {ff}")
-            if a.mode == "master":
-                rc = do_master(a, ff, fp, log)
-            elif a.mode == "rewrap":
-                rc = do_rewrap(a, ff, fp, log)
-            else:
-                rc = 0
-                for f in a.inputs:
-                    if not verify(ff, fp, os.path.abspath(os.path.expanduser(f)),
-                                  [os.path.abspath(os.path.expanduser(x)) for x in (a.like or [])],
-                                  a.full_verify, a.tol, log, a.expect):
-                        rc = 1
+        rc = run_mode(a, log)
+    except SystemExit as e:              # guard_output, load_preset, resolve_dest, ...: a clear reason, no traceback
+        log_fatal(log, a.mode, e.code if isinstance(e.code, str) else f"stopped (exit {e.code})")
+        rc = 1
+    except KeyboardInterrupt:
+        log_fatal(log, a.mode, "interrupted (Ctrl-C)")
+        rc = 130
+    except Exception as e:               # anything unexpected: the reason in the log, the traceback in the Terminal
+        traceback.print_exc()
+        log_fatal(log, a.mode, f"{type(e).__name__}: {e}")
+        rc = 1
+    try:
         log(f"=== {'DONE' if rc == 0 else 'FAILED'} {a.mode} {now()} ===")
         return rc
     finally:

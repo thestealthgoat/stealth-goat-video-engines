@@ -183,5 +183,35 @@ os.close(mq); os.close(sq)
 expect("master with a 'q' terminal as stdin: same frames as the normal master + VERIFY_OK",
        r.returncode == 0 and "VERIFY_OK" in r.stdout + r.stderr and framemd5(mq_out) == framemd5(master), r.stdout + r.stderr)
 
+# 11. every failure is in the log: FATAL <reason>, the failure line, then '=== FAILED <mode>' (a watcher never waits for ever)
+def tail_run(logf):
+    t = open(logf).read() if os.path.isfile(logf) else ""
+    return t.rsplit("=== START", 1)[-1]
+
+
+rc, o = run("master", lst, "-o", master)                                  # exists, no --force
+L = tail_run(os.path.join(enc, "encode.log"))
+expect("existing output: FATAL ... exists + ENCODE_FAIL + '=== FAILED master' in encode.log", rc == 1
+       and "FATAL: " in L and "exists (pass --force" in L and "ENCODE_FAIL FATAL" in L and "=== FAILED master" in L, L)
+rc, o = run("master", a, "-o", a, "--force")
+L = tail_run(os.path.join(OUT, ".enc", "encode.log"))
+expect("output == input: FATAL + ENCODE_FAIL + FAILED in the log", rc == 1 and "also an input" in L
+       and "ENCODE_FAIL" in L and "=== FAILED master" in L, L)
+rc, o = run("master", a, "-o", os.path.join(final, "np_log.mp4"), "--profile", os.path.join(OUT, "prof_nopreset0"))
+L = tail_run(os.path.join(enc, "encode.log"))
+expect("no encode preset in the profile: FATAL + ENCODE_FAIL + FAILED in the log", rc == 1
+       and "has no delivery.lightcast" in L and "ENCODE_FAIL" in L and "=== FAILED master" in L, L)
+badl = os.path.join(enc, "bad_concat.txt"); open(badl, "w").write(f"ffconcat version 1.0\nfile '{a}'\ninpoint soon\n")
+rc, o = run("master", badl, "-o", os.path.join(final, "bad.mp4"))
+L = tail_run(os.path.join(enc, "encode.log"))
+expect("unreadable concat list: FATAL ValueError + ENCODE_FAIL + FAILED in the log, exit 1, nothing written", rc == 1
+       and "FATAL: ValueError" in L and "ENCODE_FAIL" in L and "=== FAILED master" in L
+       and not os.path.exists(os.path.join(final, "bad.mp4")), L)
+cl = os.path.join(OUT, "copy_fail.log")
+rc, o = run("copy-verify", master, "--to", "no_such_paths_key", "--log", cl)
+L = tail_run(cl)
+expect("copy-verify to an unknown --to key: FATAL + COPY_FAIL + '=== FAILED copy-verify'", rc == 1
+       and "FATAL: --to" in L and "COPY_FAIL" in L and "=== FAILED copy-verify" in L, L)
+
 print("ALL PASS" if ok else "SOME FAILED")
 sys.exit(0 if ok else 1)

@@ -7,6 +7,8 @@ import numpy as np, cv2
 
 def main():
     a = sys.argv
+    if len(a) < 5 or '-h' in a or '--help' in a:
+        print(__doc__.strip()); sys.exit(0 if ('-h' in a or '--help' in a) else 2)
     v, out, t0, t1 = a[1], a[2], float(a[3]), float(a[4])
     n = int(a[a.index('--n') + 1]) if '--n' in a else 12
     cols = int(a[a.index('--cols') + 1]) if '--cols' in a else 6

@@ -6,6 +6,10 @@ Finds the two motion faults a render can ship with:
   stutter  a 1-2 frame repeat in the middle of motion (dropped/duplicated frame, render bug)
 Repeats on a regular cadence (29.97 material in a 59.94 file, 3:2 pulldown, a steady slow-motion conform) are not
 stutters: they are listed once as a "cadence" note. A repeat that breaks the cadence is still a stutter.
+The encoder does not always copy a repeated picture exactly (x264 leaves a little noise on some repeats), so a
+steady cadence still counts when its other repeats carry that noise. Two things stay stutters on purpose:
+  - a repeat in the middle of normal 59.94 motion (the frames around it all change), and
+  - a doubled first frame right after a cut: the shot before the cut is not evidence for the new shot's cadence.
 
 Only the flagged spots need eyes: pass --sheet to get one image with the motion timeline and
 frames from every flagged span, then Read that image instead of watching every frame.
@@ -167,15 +171,24 @@ def repeat_frames(fracs, dup=0.0005, rel=0.3):
     return b
 
 
-def cadence_of(R, e, b, min_low=6, reach=24, max_period=12):
+CUT = 0.95  # a frame-to-frame change this big (95% of pixels) is a cut or a flash: what comes before it is another shot
+
+
+def cadence_of(R, e, b, min_low=6, reach=24, max_period=12, fracs=None):
     """Is run e (a repeat) one beat of a regular repeat cadence (pulldown / frame-rate conform)? Yes when the
     repeat/new-picture pattern around it repeats exactly with a period of up to `max_period` frames for 3 periods
     (at least 12 frames) on one side, or when a stretch of runs around it (up to `reach` runs each side) follows one
-    steady Beatty pattern (fractional rates). Returns the cadence's frames per new picture, or None."""
+    steady Beatty pattern (fractional rates). Returns the cadence's frames per new picture, or None.
+    fracs (optional): when the repeat comes right after a cut (the frame before it changed by CUT or more), the
+    frames before the cut belong to another shot and are not used as evidence: a doubled first frame of a new shot
+    must fit the new shot's own cadence."""
     s, n = R[e][1], R[e][2]
+    after_cut = fracs is not None and s >= 1 and fracs[s - 1] >= CUT
     for P in range(2, max_period + 1):
         L = max(3 * P, 12)
         for a in (s + n + 1 - L, s - 1):        # window ending just after the repeat / starting just before it
+            if after_cut and a != s - 1:
+                continue
             w = b[a:a + L]
             if a < 0 or len(w) < L:
                 continue
@@ -194,6 +207,76 @@ def cadence_of(R, e, b, min_low=6, reach=24, max_period=12):
                 span = rs[-1][1] + rs[-1][2] - rs[0][1]
                 return span / sum(n for k, _, n in rs if not k)
     return None
+
+
+def noisy_cadence_of(fracs, s, n, rel=0.5, cap=0.01, beats=6, max_period=12, dup=0.0005):
+    """Second chance for an exact repeat (frames s..s+n-1, change under dup) that cadence_of turned down: is it one
+    beat of a steady cadence whose OTHER repeats carry a little encoder noise? x264 does not always code a repeated
+    picture as an exact copy, so in 29.97 material inside a 59.94 file the repeats read 0.0000-0.007 instead of 0.
+
+    Yes when, for some period P (2 = 2:1, 5 = 3:2 pulldown, ...), on one side of the repeat (`beats` periods, at
+    least 12 frames, starting just before it or ending just after it) the frames at the repeat's place in the
+    period (and, for P >= 3, any other place in the period that is always near zero) are ALL:
+      - under `cap` (1% of pixels, the same level find_issues calls motion: noise, not motion; real show
+        open/outro repeats measure up to 0.73%. At 2%, slow 59.94 motion (~1.7% a frame) with a bigger change on a
+        steady beat read as "a new picture every 12 frames" and hid a real held frame), and
+      - under `rel` x the nearest new-picture change before and after them (a repeat is clearly smaller than the
+        real changes around it),
+    while every frame at the other places is a real change (over dup) and over the noisiest repeat / 0.6 (so a
+    noisy repeat in the wrong place, i.e. a hitch, is not taken for a new picture).
+    A repeat right after a cut only looks forward (the frames before the cut are another shot), so a doubled first
+    frame of a 59.94 shot is still a stutter. Returns the cadence's frames per new picture, or None."""
+    N = len(fracs)
+    after_cut = s >= 1 and fracs[s - 1] >= CUT
+    for P in range(2, max_period + 1):
+        if n >= P:
+            continue
+        L = P * max(beats, -(-12 // P))
+        for a in ((s - 1,) if after_cut else (s + n + 1 - L, s - 1)):
+            z = a + L
+            if a < 0 or z > N:
+                continue
+            w = fracs[a:z]
+            ph = (np.arange(a, z) - s) % P
+            run = set(range(n))
+            lows = [run]
+            if P >= 3:
+                extra = {p for p in range(P) if p not in run and w[ph == p].max() < cap}
+                if extra:
+                    lows.append(run | extra)
+            for low in lows:
+                if len(low) >= P:
+                    continue
+                lm = np.isin(ph, sorted(low))
+                hi = np.flatnonzero(~lm)
+                if w[lm].max() >= cap or w[hi].min() < max(dup, w[lm].max() / 0.6):
+                    continue
+                ok = True
+                for k in np.flatnonzero(lm):
+                    before, after = hi[hi < k], hi[hi > k]
+                    refs = ([w[before[-1]]] if len(before) else []) + ([w[after[0]]] if len(after) else [])
+                    if w[k] >= rel * min(refs):
+                        ok = False
+                        break
+                if ok:
+                    return P / float(P - len(low))
+    return None
+
+
+def _noisy_partner(fracs, i, busy, dup, rel=0.3, cap=None):
+    """An exact repeat at frame i whose neighbour on one side is not busy: is that neighbour the same picture shown
+    once more, carrying a little encoder noise (a picture held for 3 frames where the cadence shows it for 2)? Yes
+    when that neighbour's change is under `busy` (or `cap` when given) and under `rel` x the real changes just outside
+    the pair, which must both be busy. Returns the (first, last) frames of the pair, or (i, i) when there is none."""
+    n = len(fracs)
+    for s, e in ((i - 1, i), (i, i + 1)):
+        k = s if s != i else e
+        if s < 1 or e + 1 >= n or not dup <= fracs[k] < (cap or busy):
+            continue
+        out = min(fracs[s - 1], fracs[e + 1])
+        if out > busy and fracs[k] < rel * out:
+            return s, e
+    return i, i
 
 
 def find_issues(fracs, stills, fps, holds, min_dead, allow_stutter, busy=0.01, dup=0.0005):
@@ -218,18 +301,34 @@ def find_issues(fracs, stills, fps, holds, min_dead, allow_stutter, busy=0.01, d
                 j = i
                 while j + 1 < n and fracs[j + 1] < dup and j - i < 2:
                     j += 1
-                if j - i < 2 and j + 1 < n and fracs[i - 1] > busy and fracs[j + 1] > busy:
-                    t0, t1 = i / fps, (j + 2) / fps
+                s, e = i, j
+                if j - i == 0 and j + 1 < n and not (fracs[i - 1] > busy and fracs[j + 1] > busy):
+                    s, e = _noisy_partner(fracs, i, busy, dup)
+                if j - i < 2 and e + 1 < n and fracs[s - 1] > busy and fracs[e + 1] > busy:
+                    t0, t1 = s / fps, (e + 2) / fps
                     if not covered(t0, t1, holds, slack):
                         if R is None:
                             rep = repeat_frames(fracs, dup)
                             R = _runs(rep)
                             idx = np.repeat(np.arange(len(R)), [r[2] for r in R])
-                        per = cadence_of(R, int(idx[i]), rep)
+                        per = cadence_of(R, int(idx[s]), rep, fracs=fracs) or \
+                            noisy_cadence_of(fracs, s, e - s + 1, dup=dup)
+                        if per == 2.0 and s == e:
+                            # In a 2-frame cadence a picture is never shown 3 times, and the frame after a real change
+                            # is always a repeat. So a neighbour that changes little (under 3%, and under 0.3x the real
+                            # changes on both sides of the pair) is this picture shown once more with encoder noise
+                            # (over `busy`, so the check above took it for a new picture): a 3-frame hold. Checked as
+                            # that pair instead (game clips' noisy repeats measure up to ~2%).
+                            ps, pe = _noisy_partner(fracs, s, busy, dup, cap=0.03)
+                            if (ps, pe) != (s, e):
+                                s, e = ps, pe
+                                t0, t1 = s / fps, (e + 2) / fps
+                                per = cadence_of(R, int(idx[s]), rep, fracs=fracs) or \
+                                    noisy_cadence_of(fracs, s, e - s + 1, dup=dup)
                         if per:
-                            cad.append((t0, t1, j - i + 1, per))
+                            cad.append((t0, t1, e - s + 1, per))
                         else:
-                            issues.append({"kind": "stutter", "t0": t0, "t1": t1, "frames": j - i + 1})
+                            issues.append({"kind": "stutter", "t0": t0, "t1": t1, "frames": e - s + 1})
                 i = j + 1
             else:
                 i += 1

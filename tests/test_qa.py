@@ -235,5 +235,139 @@ with open(bad, "w") as fh:
 rc, j, log, _ = qa(bad)
 expect("unreadable file exits 2", rc == 2, log)
 
+# ---- fixes 2026-11-07 (gaps found while updating the skills) ---------------------------------------------------
+import tempfile
+
+
+def gate_row(j, prefix):
+    return next((x for x in (j or {}).get("gates", []) if x["gate"].startswith(prefix)), {})
+
+
+def sev_of(j, kind):
+    return [x["sev"] for x in (j or {}).get("flags", []) if x["kind"] == kind]
+
+
+# 1. a concat list written by another shell (absolute /sessions/<id>/mnt/... paths): parts are found next to the list
+jump = render("jump_stale", [shot(1.5), shot(1.8, **B), shot(1.7, **C)], tone(5))
+sdir = os.path.join(OUT, "stale_parts"); os.makedirs(sdir, exist_ok=True)
+for n, dur in enumerate((1.5, 1.8, 1.7)):
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc2=s=320x180:r={R}:d={dur}",
+                    "-c:v", "libx264", os.path.join(sdir, f"p{n}.mp4")], check=True, stdin=subprocess.DEVNULL)
+stale = os.path.join(sdir, "list.txt")
+other = "/sessions/zz-no-such-session/mnt/ORG/02 Clips/Highlights/_parts"
+open(stale, "w").write("".join(f"file '{other}/p{n}.mp4'\n" for n in range(3)))
+rc, j, log, out = qa(jump, "--shotlist", stale)
+expect("--shotlist list.txt from another shell: parts found next to the list, cuts 1.5/3.3, clip passes, said once",
+       rc == 0 and j and len(j.get("planned_cuts") or []) == 2
+       and all(abs(x - y) < 0.02 for x, y in zip(j["planned_cuts"], (1.5, 3.3))) and log.count("next to the list") == 1
+       and "next to the list" in open(os.path.join(out, "review.md")).read(), log)
+gone = os.path.join(sdir, "list_gone.txt")
+open(gone, "w").write(f"file '{other}/p9.mp4'\nfile '{other}/p1.mp4'\n")
+rc, j, log, _ = qa(jump, "--shotlist", gone)
+expect("--shotlist: a part missing both as listed and next to the list stops and names both paths",
+       rc != 0 and f"{other}/p9.mp4" in log and os.path.join(sdir, "p9.mp4") in log, log)
+
+# 2. delivery.fps_allowed: a profile that also delivers 59.94 (29.97 material shown at 2x) passes 59.94 files
+ptmp = tempfile.mkdtemp(prefix="qa_prof_")
+gen = json.load(open(GENERIC)); gen["name"] = "allow5994"; gen["delivery"]["fps_allowed"] = [59.94005994]
+json.dump(gen, open(os.path.join(ptmp, "profile.json"), "w"))
+c60b = render("cadence_59b", [f"testsrc2=s={S}:r={R}:d=4,fps=60000/1001"], tone(4))
+rc, j, log, _ = qa(c60b, "--cuts", "none", profile=ptmp)
+expect("delivery.fps_allowed [59.94]: a 59.94 file passes spec without --fps",
+       gate_row(j, "integrity").get("result") == "PASS" and not sev_of(j, "spec_fps"), log)
+rc, j, log, _ = qa(c60b, "--cuts", "none")
+expect("profile without fps_allowed: a 59.94 file still FAILs spec_fps (default unchanged)",
+       rc == 1 and flagged(j, "spec_fps"), log)
+rc, j, log, _ = qa(c60b, "--cuts", "none", "--fps", "29.97", profile=ptmp)
+expect("--fps overrides fps_allowed: --fps 29.97 on a 59.94 file FAILs spec_fps", rc == 1 and flagged(j, "spec_fps"), log)
+
+# 3. avg_frame_rate a hair under a declared constant r_frame_rate (timestamp gaps): spec on r_frame_rate + WARN
+def dropped(name, k):
+    out = os.path.join(OUT, name + ".mp4")
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", f"testsrc2=s={S}:r=60000/1001:d=4",
+                    "-f", "lavfi", "-i", tone(4), "-vf", f"select='not(between(n\\,120\\,{119 + k}))'",
+                    "-fps_mode", "passthrough", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-shortest", out], check=True, stdin=subprocess.DEVNULL)
+    return out
+
+
+d1 = dropped("gap_1frame", 1)    # 239 frames in 4 s: avg 59.69 (-0.4%), r 60000/1001
+rc, j, log, _ = qa(d1, "--cuts", "none", "--fps", "59.94")
+w = [x for x in (j or {}).get("flags", []) if x["kind"] == "spec_fps"]
+expect("avg 59.69 in a file flagged 60000/1001: spec judged on r_frame_rate, the average shown as a WARN",
+       j and not flagged(j, "spec_fps") and [x["sev"] for x in w] == ["WARN"] and "average frame rate 59.6" in w[0]["what"]
+       and gate_row(j, "integrity").get("result") == "WARN", log)
+d3 = dropped("gap_3frames", 3)   # 237 frames: avg 59.19 (-1.25%): a real rate problem, still a FAIL
+rc, j, log, _ = qa(d3, "--cuts", "none", "--fps", "59.94")
+expect("avg 1.25% under r_frame_rate: still a spec_fps FAIL", rc == 1 and flagged(j, "spec_fps"), log)
+
+# 4. --kind loop: a gentle loop (no strong moment) is not hook-gated; the motion gates still run
+drift_only = render("loop_drift", f"{bg}[bg];{box}[box];[bg][box]overlay=x='100+t*80':y=300:shortest=1[v]", tone(5))
+rc, j, log, _ = qa(drift_only, "--kind", "motion", "--size", "1280x720", "--cuts", "none")
+expect("--kind motion on a gentle loop: hook 'strong moment' FAILs (default unchanged)",
+       rc == 1 and flagged(j, "hook_strong"), log)
+rc, j, log, _ = qa(drift_only, "--kind", "loop", "--size", "1280x720", "--cuts", "none")
+expect("--kind loop: hook and end-tail gates listed as SKIP (with their measurement), no FAIL, exit 0",
+       rc == 0 and gate_row(j, "hook: strong").get("result") == "SKIP"
+       and gate_row(j, "hook: motion").get("result") == "SKIP" and gate_row(j, "end card").get("result") == "SKIP"
+       and "biggest move" in gate_row(j, "hook: strong").get("measured", "")
+       and gate_row(j, "motion (motion_check --strict").get("result") == "PASS", log)
+frozen = render("loop_frozen", [shot(1.0) + ",tpad=stop_mode=clone:stop_duration=2", shot(2.0, **B)], tone(5))
+rc, j, log, _ = qa(frozen, "--kind", "loop", "--cuts", "1.0")
+expect("--kind loop still FAILs a 2 s freeze mid-loop (motion gates still apply)", rc == 1 and
+       (flagged(j, "dead") or flagged(j, "hold_life")), log)
+
+# 5. --intended end_tail,hook: a designed hold or weak hook becomes an INFO line, never a silent PASS
+tailc = render("tail_intended", [shot(1.5), shot(2.5, **B)], tone(7), extra_v="tpad=stop_mode=clone:stop_duration=3")
+rc, j, log, out = qa(tailc, "--cuts", "1.5", "--holds", "end:3", "--intended", "end_tail")
+g = gate_row(j, "end card")
+expect("--intended end_tail: the 3 s tail is an INFO line 'declared intended', gate INFO (not PASS), exit 0",
+       rc == 0 and sev_of(j, "end_tail") == ["INFO"] and g.get("result") == "INFO"
+       and "declared intended" in g.get("target", "") and "declared intended" in j["verdict"]
+       and "**INFO**" in open(os.path.join(out, "review.md")).read(), log)
+rc, j, log, _ = qa(drift_only, "--kind", "motion", "--size", "1280x720", "--cuts", "none", "--intended", "hook")
+expect("--intended hook: the weak-hook FAIL becomes INFO, exit 0", rc == 0 and sev_of(j, "hook_strong") == ["INFO"]
+       and gate_row(j, "hook: strong").get("result") == "INFO", log)
+rc, j, log, _ = qa(tailc, "--cuts", "1.5", "--intended", "hook")
+expect("--intended hook does not cover the end tail: still a FAIL", rc == 1 and flagged(j, "end_tail"), log)
+rc, j, log, _ = qa(tailc, "--cuts", "1.5", "--intended", "stutter")
+expect("--intended with a gate that has its own flag (stutter) stops with a clear message",
+       rc != 0 and "choose from" in log, log)
+expect("--intended with an unknown name is a usage error: exit 2 (not 1, which means a QA FAIL)", rc == 2, log)
+# review 2026-11-07: delivery.fps_allowed written as one number (no list) still works; garbage is a clear exit 2
+gen["name"] = "allow5994_scalar"; gen["delivery"]["fps_allowed"] = 59.94005994
+json.dump(gen, open(os.path.join(ptmp, "profile.json"), "w"))
+rc, j, log, _ = qa(c60b, "--cuts", "none", profile=ptmp)
+expect("delivery.fps_allowed as a bare number (59.94): a 59.94 file passes spec, no crash",
+       gate_row(j, "integrity").get("result") == "PASS" and not sev_of(j, "spec_fps") and "Traceback" not in log, log)
+gen["delivery"]["fps_allowed"] = ["fast"]; json.dump(gen, open(os.path.join(ptmp, "profile.json"), "w"))
+rc, j, log, _ = qa(c60b, "--cuts", "none", profile=ptmp)
+expect("delivery.fps_allowed not a list of rates: exit 2 with a message naming the key, no traceback",
+       rc == 2 and "delivery.fps_allowed should be a list" in log and "Traceback" not in log, log)
+
+# concat lists whose folder has a ' in it (e.g. "Al's Shop").
+# Render scripts that build concat lists write the ' as '\'' (the concat demuxer's quoting); lists written before that
+# have it unescaped. qa's --shotlist reader takes both, and finds the parts next to the list when the listed folder
+# (with its ') is gone.
+sys.path.insert(0, os.path.join(REPO, "engine"))
+import qa as _qa  # noqa: E402
+import shutil as _sh2, tempfile as _tf2  # noqa: E402
+aq = os.path.join(_tf2.mkdtemp(prefix="qa_apos_"), "Al's Shop", "_parts")
+os.makedirs(aq)
+for n in range(3):
+    _sh2.copy(os.path.join(pdir, f"p{n}.mp4"), os.path.join(aq, f"p{n}.mp4"))
+want = _qa.concat_list_cuts(lst)   # the plain list of the same parts (pdir, no ')
+for tag, body in [("escaped '\\''", "".join("file '" + f"{aq}/p{n}.mp4".replace("'", "'\\''") + "'\n" for n in range(3))),
+                  ("older unescaped", "".join(f"file '{aq}/p{n}.mp4'\n" for n in range(3))),
+                  ("escaped, listed folder gone (parts next to the list)",
+                   "".join("file '" + f"/sessions/zz/Al's Shop/p{n}.mp4".replace("'", "'\\''") + "'\n" for n in range(3)))]:
+    lp_ = os.path.join(aq, "list.txt"); open(lp_, "w").write(body)
+    try:
+        got = _qa.concat_list_cuts(lp_)
+    except SystemExit as e:
+        got = f"SystemExit: {e}"
+    expect(f"concat list in a folder with a ' ({tag}): same cuts as the plain list {want}", got == want and len(want) == 2,
+           f"got {got}")
+
 print("\nALL TESTS PASSED" if ok else "\nSOME TESTS FAILED")
 sys.exit(0 if ok else 1)

@@ -125,6 +125,28 @@ expect("unknown card name stays a path", offload.resolve_src("nosuchcard_xyz", o
 r = subprocess.run([sys.executable, OFF, "--help"], capture_output=True, text=True)
 expect("--help", r.returncode == 0 and "--files-from" in r.stdout)
 
+# 10. a problem that stops the run is in the log too: FATAL <reason> + <LABEL>_INCOMPLETE (exit 2)
+fl = os.path.join(OUT, "fatal.log")
+rc, o = run(os.path.join(OUT, "NO_CARD"), os.path.join(OUT, "fatal_dst"), "--label", "REC", "--log", fl)
+L = open(fl).read() if os.path.isfile(fl) else ""
+expect("card not mounted: FATAL source not found + REC_INCOMPLETE FATAL in the log, exit 2, DST not created",
+       rc == 2 and "FATAL: source not found" in L and "REC_INCOMPLETE FATAL" in L
+       and not os.path.exists(os.path.join(OUT, "fatal_dst")))
+rc, o = run(os.path.join(OUT, "NO_CARD"), os.path.join(OUT, "fatal_dst2"))
+expect("card not mounted, default log: DST is not created just for the log", rc == 2
+       and not os.path.exists(os.path.join(OUT, "fatal_dst2")))
+rc, o = run(card, os.path.join(OUT, "fatal_dst3"), "--since", "yesterday", "--label", "PHOTOS", "--log", fl)
+L = open(fl).read()
+expect("bad --since: FATAL bad date/time + PHOTOS_INCOMPLETE FATAL in the log, exit 2",
+       rc == 2 and "FATAL: bad date/time 'yesterday'" in L and "PHOTOS_INCOMPLETE FATAL" in L)
+rc, o = run(card, os.path.join(OUT, "fatal_dst4"), "--files-from", os.path.join(OUT, "no_list.txt"), "--log", fl)
+L = open(fl).read()
+expect("missing --files-from list: FATAL FileNotFoundError + ALL_INCOMPLETE FATAL in the log, exit 2",
+       rc == 2 and "FATAL: FileNotFoundError" in L and "ALL_INCOMPLETE FATAL" in L)
+rc, o = run(card, os.path.join(card, "copy"), "--log", os.path.join(card, "x.log"))
+expect("log inside the source is still never written", rc == 2 and not os.path.exists(os.path.join(card, "x.log")))
+expect("source still untouched", snapshot(os.path.join(OUT, "card")) == before)
+
 for root, dirs, files in os.walk(OUT):
     for n in files:
         os.chmod(os.path.join(root, n), 0o644)

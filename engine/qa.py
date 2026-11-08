@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """qa.py - the video-gates QA run: one command, one review folder, every machine check.
 
-    python3 engine/qa.py <video> [--profile NAME] [--kind edit|motion|explainer] [--holds 3.5-4.0,end:1.2]
+    python3 engine/qa.py <video> [--profile NAME] [--kind edit|motion|explainer|loop] [--holds 3.5-4.0,end:1.2]
                          [--cuts 1.5,4.2,... | --shotlist <out dir>/_parts/list.txt | cuts.json] [--max-scene 2.5] [--out <review dir>]
-                         [--allow-stutter] [--silences a-b,...] [--size WxH] [--fps N]
+                         [--allow-stutter] [--silences a-b,...] [--size WxH] [--fps N] [--intended end_tail,hook]
 
 Writes <out>/review.md (verdict, fix lines, gate table, shot table, manual checks), <out>/sheet.jpg (timeline,
 one frame per shot with the safe area drawn, evidence strips for the worst flags) and <out>/qa.json.
 
 Checks, in one run:
-  spec       size, fps, frames, pixel format, audio present against the profile's delivery block; clean decode
+  spec       size, fps, frames, pixel format, audio present against the profile's delivery block; clean decode.
+             Accepted rates: delivery.fps and delivery.fps_allowed (or only --fps when given). The rate is the
+             average (avg_frame_rate); when that misses but the file declares an accepted standard rate
+             (r_frame_rate) within 0.5%, spec is judged on r_frame_rate and the average is a WARN (timestamp gaps)
   motion     engine/motion_check.py (dead stretches, stutters); --strict for --kind motion. Regular repeat cadences
              are a note when they are delivery-rate material in a file at a multiple of that rate (29.97 in 59.94),
              else a WARN (lower-rate material conformed by repeating frames, e.g. 25p in a 29.97 file)
@@ -26,6 +29,13 @@ Checks, in one run:
 Every flag is written as a fix line:  f<start>-f<end> (mm:ss.s) - what - why - fix
 Text safe-area and over-face checks are listed in review.md as manual checks to do from the sheet.
 --cuts none = "no cuts planned" (every detected cut is unplanned). Without --cuts/--shotlist cuts are listed only.
+--shotlist list.txt: a listed part that doesn't exist here (a path from another shell, e.g. /sessions/<id>/mnt/...)
+is looked for next to the list; qa says so once, and stops naming both paths when neither exists.
+--kind loop: a loop or overlay piece (logo swing, corner bug, lower third). Same gates as motion, except the hook
+and end-tail gates, which are listed as SKIP with their measurement (a loop has no opening or ending of its own).
+--intended end_tail,hook: those gates (hook, hook_motion, hook_strong, end_tail) still run; a failure becomes an
+INFO line "declared intended" and is not counted in the verdict. Use it for designed holds (a logo intro holding
+its last frame) and pieces not meant to grab a scroll. It is never a silent PASS.
 Default --out: ./qa_<video name>/ in the current folder.
 Exit code 0 = PASS, 1 = FAIL, 2 = could not read the file.
 Needs ffmpeg/ffprobe (scdet, ebur128), numpy, Pillow.
@@ -63,8 +73,11 @@ DIGITAL_DB = -80.0      # peak below this is digital silence (a dropout when ins
 CLICK_RATIO = 25.0      # click: peak of the 2nd difference >= 25x its RMS within +-10 ms (real mixes stay < 18) ...
 CLICK_MIN = 0.05        # ... and >= 0.05 full scale
 HOP = 240               # 5 ms at 48 kHz
+STD_RATES = (24000 / 1001, 24, 25, 30000 / 1001, 30, 48000 / 1001, 48, 50, 60000 / 1001, 60, 100,
+             120000 / 1001, 120)   # constant rates a file can declare in r_frame_rate
 
-SEV_RANK = {"FAIL": 0, "WARN": 1}
+SEV_RANK = {"FAIL": 0, "WARN": 1, "INFO": 2}   # INFO: a gate the run declared intended (--intended), not counted
+NOTES = []              # run notes for review.md (e.g. concat-list paths resolved next to the list)
 ORDER = ["decode", "spec_size", "spec_fps", "flash", "glitch", "unplanned_cut", "dropout", "click", "audio_hard",
          "silence", "dead", "stutter", "cadence", "loudness", "true_peak", "hook_motion", "hook_strong", "hold_life",
          "end_tail", "freshness", "frames", "pix_fmt", "no_audio", "missing_cut", "pop", "edge_silence"]
@@ -129,7 +142,10 @@ def load_cuts(a):
 # ---- probe -----------------------------------------------------------------------------------------------------
 def concat_list_cuts(path):
     """Cut times from an ffmpeg concat list (e.g. render_reel/vreel '_parts/list.txt'): the running sum of the
-    parts' durations, without the end of the last part. None when the file is not a concat list."""
+    parts' durations, without the end of the last part. None when the file is not a concat list.
+    render_reel/vreel write the absolute part paths of the shell that rendered (e.g. /sessions/<id>/mnt/... in the
+    device shell) and only rewrite the list when concat.mp4 is missing, so a listed path may not exist here: then
+    the part is looked for next to the list (<list dir>/<file name>), and that is said once."""
     files, durs = [], {}
     base = os.path.dirname(os.path.abspath(path))
     with open(path, errors="replace") as f:
@@ -143,6 +159,20 @@ def concat_list_cuts(path):
                 durs[len(files) - 1] = float(s.split()[1])
     if not files:
         return None
+    moved = 0
+    for i, p in enumerate(files[:-1]):
+        if durs.get(i) is not None or os.path.exists(p):
+            continue
+        alt = os.path.join(base, os.path.basename(p))
+        if not os.path.exists(alt):
+            raise SystemExit(f"qa: {path}: part {i + 1} not found, neither as listed ({p}) nor next to the list "
+                             f"({alt}). Pass --cuts instead, or re-render the parts.")
+        files[i] = alt
+        moved += 1
+    if moved:
+        NOTES.append(f"{os.path.basename(path)}: {moved} part path(s) in the list don't exist on this machine "
+                     f"(written by another shell?); used the parts next to the list in {base}")
+        print(f"qa: note: {NOTES[-1]}")
     t, cuts = 0.0, []
     for i, p in enumerate(files[:-1]):
         d = durs.get(i)
@@ -174,9 +204,11 @@ def probe(path):
             return float(n) / float(d) if float(d) else 0.0
         except (ValueError, AttributeError):
             return 0.0
-    fps = rate(v.get("avg_frame_rate")) or rate(v.get("r_frame_rate")) or 30.0
+    avg, rr = rate(v.get("avg_frame_rate")), rate(v.get("r_frame_rate"))
+    fps = avg or rr or 30.0
     pf = v.get("pix_fmt", "")
     return {"w": int(v["width"]), "h": int(v["height"]), "fps": fps, "pix_fmt": pf, "codec": v.get("codec_name"),
+            "avg_fps": avg, "r_fps": rr, "r_fps_str": v.get("r_frame_rate"),
             "fps_str": v.get("avg_frame_rate") or v.get("r_frame_rate"),
             "nb_frames": int(v["nb_frames"]) if str(v.get("nb_frames", "")).isdigit() else None,
             "alpha": pf.startswith(("yuva", "rgba", "argb", "bgra", "abgr", "gbrap", "ya")),
@@ -409,14 +441,51 @@ def gate_spec(R, info, V, P, a, kind):
             warns += 1
             R.flag("spec_size", "WARN", 0, R.n - 1, f"frame size {got} is the preview size",
                    "fine for review, not for delivery", "deliver the full-size render", "spec")
-    want_fps = a.fps if a.fps else (P.get("delivery.fps", None) if P is not None else None)
-    meas.append(f"{info['fps']:.3f} fps")
-    if want_fps:
-        tgt.append(f"{float(want_fps):.3f} fps")
-        if abs(info["fps"] - float(want_fps)) > 0.01:
+    # expected file rates: --fps alone when given, else delivery.fps plus delivery.fps_allowed (other rates the
+    # profile delivers, e.g. 59.94 reels made of 29.97 material shown at 2x)
+    if a.fps:
+        rates = [float(a.fps)]
+    elif P is not None and P.get("delivery.fps", None):
+        extra = P.get("delivery.fps_allowed", []) or []
+        if not isinstance(extra, (list, tuple)):
+            extra = [extra]                              # a single rate written without the list brackets
+        try:
+            extra = [float(x) for x in extra]
+        except (TypeError, ValueError):
+            print(f"qa: profile {P.name}: delivery.fps_allowed should be a list of frame rates, e.g. "
+                  f"[59.94005994] (got {P.get('delivery.fps_allowed')!r})", file=sys.stderr)
+            raise SystemExit(2)
+        rates = [float(P.get("delivery.fps"))] + extra
+    else:
+        rates = []
+    # the rate the spec is judged on: avg_frame_rate (frames / duration). When that misses every expected rate but
+    # the file declares a standard constant rate (r_frame_rate) that is expected and that the average misses by
+    # under 0.5%, the difference is timestamp gaps or uneven frame durations, not a different rate: the spec is
+    # judged on r_frame_rate and the average stays visible as a WARN (a real problem to look at, not hidden).
+    spec_fps, avg_note = info["fps"], None
+    rr, av = info.get("r_fps") or 0.0, info.get("avg_fps") or 0.0
+
+    def hit(x):
+        return any(abs(x - w) <= 0.01 for w in rates)
+    if rates and av and rr and not hit(av) and hit(rr) and abs(av / rr - 1) < 0.005 and \
+            any(abs(rr / s_ - 1) < 1e-4 for s_ in STD_RATES):
+        spec_fps, avg_note = rr, av
+    meas.append(f"{spec_fps:.3f} fps" + (f" (r_frame_rate; average {avg_note:.3f})" if avg_note else ""))
+    if rates:
+        tgt.append(" or ".join(f"{x:.3f}" for x in rates) + " fps")
+        if not hit(spec_fps):
             fails += 1
-            R.flag("spec_fps", "FAIL", 0, R.n - 1, f"{info['fps']:.3f} fps, profile delivers {float(want_fps):.3f}",
-                   "a rate conform at upload drops or repeats frames", f"render at {float(want_fps):.3f} fps", "spec")
+            want = " or ".join(f"{x:.3f}" for x in rates)
+            R.flag("spec_fps", "FAIL", 0, R.n - 1, f"{spec_fps:.3f} fps, profile delivers {want}",
+                   "a rate conform at upload drops or repeats frames", f"render at {rates[0]:.3f} fps", "spec")
+    if avg_note:
+        warns += 1
+        R.flag("spec_fps", "WARN", 0, R.n - 1,
+               f"average frame rate {avg_note:.3f} fps ({info['fps_str']}) in a file flagged {info['r_fps_str']} "
+               f"({rr:.3f} fps): about {abs(rr - avg_note) * R.n / avg_note:.0f} frame(s) of timestamp gaps or "
+               "uneven frame durations", "players may hitch where frames are missing or held",
+               "check the joins of the parts (stutter flags show where) and re-mux or re-render at a constant rate",
+               "spec")
     meas.append(f"{V['n']} frames")
     if info["nb_frames"] and abs(info["nb_frames"] - V["n"]) > 1:
         warns += 1
@@ -429,7 +498,7 @@ def gate_spec(R, info, V, P, a, kind):
         R.flag("pix_fmt", "WARN", 0, R.n - 1, f"pixel format {info['pix_fmt']}, delivery uses {want_pf}",
                "some players and platforms reject or shift colours", f"encode with -pix_fmt {want_pf}", "spec")
     meas.append("audio" if info["audio"] else "no audio")
-    if not info["audio"] and kind != "motion":
+    if not info["audio"] and kind not in ("motion", "loop"):
         warns += 1
         R.flag("no_audio", "WARN", 0, R.n - 1, "no audio stream", "an edit or explainer is expected to have sound",
                "mux the mix in (or run with --kind motion for a silent overlay)", "spec")
@@ -445,7 +514,7 @@ def gate_motion(R, a, kind, out_dir, video, info=None, P=None):
     cmd = [sys.executable, os.path.join(HERE, "motion_check.py"), video, "--json", os.path.join(out_dir, "_motion.json")]
     if a.holds:
         cmd += ["--holds", a.holds]
-    if kind == "motion":
+    if kind in ("motion", "loop"):
         cmd.append("--strict")
     if a.allow_stutter:
         cmd.append("--allow-stutter")
@@ -493,7 +562,7 @@ def gate_motion(R, a, kind, out_dir, video, info=None, P=None):
                "lower-rate material conformed by repeating frames judders on screen",
                f"conform the source to {deliv:.3f} fps with frame blending or optical flow (or shoot/render it at that "
                f"rate), then re-render", "motion")
-    R.gate("motion (motion_check" + (" --strict" if kind == "motion" else "") + ")",
+    R.gate("motion (motion_check" + (" --strict" if kind in ("motion", "loop") else "") + ")",
            "FAIL" if nd + ns else ("WARN" if cad_warn else "PASS"), f"{nd} dead, {ns} stutter" +
            (f", {cad['count']} repeats on a regular cadence (a new picture every ~{cad['every']:g} frames; " +
             ("not delivery-rate material: a conform judder)" if cad_warn else "not stutters)") if cad else ""),
@@ -716,18 +785,51 @@ def gate_pops(R, V, cuts, flash_events):
     R.gate("pops", "WARN" if k else "PASS", f"{k} one-frame pops", "none (warning only)")
 
 
-def gate_hook_holds(R, V, cuts, kind, max_scene, holds):
+# --intended names -> the flag kinds they cover (gates that no --holds / --cuts / --silences can declare)
+INTENDED = {"hook": ("hook_motion", "hook_strong"), "hook_motion": ("hook_motion",),
+            "hook_strong": ("hook_strong",), "end_tail": ("end_tail",)}
+LOOP_SKIP = "not gated for --kind loop (a loop or overlay has no opening or ending of its own)"
+
+
+def parse_intended(spec):
+    out = set()
+    for name in filter(None, (x.strip() for x in (spec or "").split(","))):
+        if name not in INTENDED:
+            raise SystemExit(f"qa: --intended {name!r}: not a gate that can be declared intended "
+                             f"(choose from {', '.join(INTENDED)}; planned stills, cuts and silences go in "
+                             "--holds, --cuts and --silences)")
+        out.update(INTENDED[name])
+    return out
+
+
+def _fail_or_intended(R, fkind, gate, f0, f1, what, why, fix, gname, measured, target, intended):
+    """A failing hook/tail gate: a FAIL, or an INFO line when the run declared it intended (never a silent PASS)."""
+    if fkind in intended:
+        R.flag(fkind, "INFO", f0, f1, what + f" (declared intended: --intended {fkind})", why,
+               "none: declared intended (drop it from --intended to gate it again)", gate)
+        R.gate(gname, "INFO", measured, target + f"; declared intended (--intended {fkind}), not counted")
+    else:
+        R.flag(fkind, "FAIL", f0, f1, what, why, fix, gate)
+        R.gate(gname, "FAIL", measured, target)
+
+
+def gate_hook_holds(R, V, cuts, kind, max_scene, holds, intended=frozenset()):
     fps, n = R.fps, R.n
     stills = V["stills"]
+    loop = kind == "loop"
     # 1. motion in the first 0.5 s
     first = next((s for s in stills if s[0] == 0), None)
     t_move = (first[1] + 1) / fps if first else 1 / fps
     ok = t_move <= 0.5 + 1e-6
-    if not ok:
-        R.flag("hook_motion", "FAIL", 0, first[1], f"nothing moves until {t_move:.2f} s",
-               "viewers decide in the first half second; a still opening reads as a frozen player",
-               "start on motion: something moving at f0 (a push-in, an element arriving), or trim the head", "hook")
-    R.gate("hook: motion by 0.5 s", "PASS" if ok else "FAIL", f"first change at {t_move:.2f} s", "<= 0.50 s")
+    if loop:
+        R.gate("hook: motion by 0.5 s", "SKIP", f"first change at {t_move:.2f} s", LOOP_SKIP)
+    elif not ok:
+        _fail_or_intended(R, "hook_motion", "hook", 0, first[1], f"nothing moves until {t_move:.2f} s",
+                          "viewers decide in the first half second; a still opening reads as a frozen player",
+                          "start on motion: something moving at f0 (a push-in, an element arriving), or trim the head",
+                          "hook: motion by 0.5 s", f"first change at {t_move:.2f} s", "<= 0.50 s", intended)
+    else:
+        R.gate("hook: motion by 0.5 s", "PASS", f"first change at {t_move:.2f} s", "<= 0.50 s")
     # 2. a strong moment by 2 s
     lim = int(2.0 * fps)
     t_cut = next((f / fps for f, _, _ in cuts if f <= lim), None)
@@ -735,17 +837,21 @@ def gate_hook_holds(R, V, cuts, kind, max_scene, holds):
     t_big = big[0] / fps if len(big) else None
     cands = [t for t in (t_cut, t_big) if t is not None]
     if cands:
-        R.gate("hook: strong moment by 2 s", "PASS", f"{'cut' if t_cut == min(cands) else 'big move'} at "
-               f"{min(cands):.2f} s", "<= 2.0 s")
+        R.gate("hook: strong moment by 2 s", "SKIP" if loop else "PASS",
+               f"{'cut' if t_cut == min(cands) else 'big move'} at {min(cands):.2f} s",
+               LOOP_SKIP if loop else "<= 2.0 s")
     else:
         mx = float(V["strong"][:lim + 1].max()) * 100
-        R.flag("hook_strong", "FAIL", 0, min(lim, n - 1), f"no strong moment by 2 s (no cut; biggest move "
-               f"{mx:.0f}% of the frame)", "a weak hook loses the scroll",
-               "put a cut, a hit or a big move (>= 20% of the frame in 0.2 s) by 1-2 s", "hook")
-        R.gate("hook: strong moment by 2 s", "FAIL", f"none (biggest move {mx:.0f}%)", "<= 2.0 s")
+        if loop:
+            R.gate("hook: strong moment by 2 s", "SKIP", f"none (biggest move {mx:.0f}%)", LOOP_SKIP)
+        else:
+            _fail_or_intended(R, "hook_strong", "hook", 0, min(lim, n - 1), f"no strong moment by 2 s (no cut; "
+                              f"biggest move {mx:.0f}% of the frame)", "a weak hook loses the scroll",
+                              "put a cut, a hit or a big move (>= 20% of the frame in 0.2 s) by 1-2 s",
+                              "hook: strong moment by 2 s", f"none (biggest move {mx:.0f}%)", "<= 2.0 s", intended)
     # 3. holds without life (motion graphics and explainers)
     tail = stills[-1] if stills and stills[-1][1] == n - 1 else None
-    if kind in ("motion", "explainer"):
+    if kind in ("motion", "explainer", "loop"):
         bad = [s for s in stills if s is not tail and (s[1] - s[0] + 1) / fps > 0.8 + 0.5 / fps]
         for s, e in bad:
             R.flag("hold_life", "FAIL", s, e, f"{(e - s + 1) / fps:.2f} s hold with no life",
@@ -756,11 +862,15 @@ def gate_hook_holds(R, V, cuts, kind, max_scene, holds):
                "<= 0.8 s")
     # 4. static tail / end card
     t_tail = (tail[1] - tail[0] + 1) / fps if tail else 0.0
-    if t_tail > 1.5 + 0.5 / fps:
-        R.flag("end_tail", "FAIL", tail[0], tail[1], f"static tail of {t_tail:.2f} s",
-               "the end card overstays and the viewer leaves before the end",
-               f"trim the tail to 0.6-1.4 s (cut {t_tail - 1.2:.1f} s) or keep it alive", "holds")
-    R.gate("end card / static tail", "FAIL" if t_tail > 1.5 + 0.5 / fps else "PASS", f"{t_tail:.2f} s", "<= 1.5 s")
+    if loop:
+        R.gate("end card / static tail", "SKIP", f"{t_tail:.2f} s", LOOP_SKIP)
+    elif t_tail > 1.5 + 0.5 / fps:
+        _fail_or_intended(R, "end_tail", "holds", tail[0], tail[1], f"static tail of {t_tail:.2f} s",
+                          "the end card overstays and the viewer leaves before the end",
+                          f"trim the tail to 0.6-1.4 s (cut {t_tail - 1.2:.1f} s) or keep it alive",
+                          "end card / static tail", f"{t_tail:.2f} s", "<= 1.5 s", intended)
+    else:
+        R.gate("end card / static tail", "PASS", f"{t_tail:.2f} s", "<= 1.5 s")
 
 
 def gate_freshness(R, V, cuts, max_scene):
@@ -859,7 +969,7 @@ def make_sheet(path, out, info, V, A, R, cuts_table, planned_f, holds, safe_px, 
     for x in R.flags:
         if x["f0"] == 0 and x["f1"] >= n - 1:
             continue                                     # whole-film flags (spec, loudness) are in the text
-        col = (120, 30, 30) if x["sev"] == "FAIL" else (110, 80, 20)
+        col = (120, 30, 30) if x["sev"] == "FAIL" else ((110, 80, 20) if x["sev"] == "WARN" else (70, 70, 90))
         d.rectangle([tx(x["f0"]), y0 + 2, max(tx(x["f0"]) + 2, tx(x["f1"])), y0 + 18], fill=col)
     lanes = [("change", np.clip(V["c"] * 4, 0, 1), (200, 200, 200)), ("luma", V["Y"] / 255.0, (240, 220, 90)),
              ("big move", np.clip(V["strong"] / max(STRONG_FRAC * 2, 1e-6), 0, 1), (90, 200, 240))]
@@ -904,7 +1014,8 @@ def make_sheet(path, out, info, V, A, R, cuts_table, planned_f, holds, safe_px, 
         y += 20
     for x, fr in strips:
         d.text((12, y), f"{x['sev']} {x['kind']}  f{x['f0']}-f{x['f1']} ({tc(x['t0'])})  {x['what']}"[:150],
-               font=small, fill=(255, 120, 120) if x["sev"] == "FAIL" else (240, 180, 80))
+               font=small, fill=(255, 120, 120) if x["sev"] == "FAIL" else
+               ((240, 180, 80) if x["sev"] == "WARN" else (170, 170, 200)))
         for c, f in enumerate(fr):
             cx = 12 + c * (tw + 8)
             if f in imgs:
@@ -933,6 +1044,10 @@ def write_review(path, R, info, V, A, a, kind, profile_name, cuts_table, planned
     else:
         L.append("- none from the machine pass")
     L.append("\nJudge every flag by frame on `sheet.jpg` (evidence strips): real, intended or false alarm.\n")
+    if NOTES:
+        L.append("## Notes\n")
+        L.extend(f"- {x}" for x in NOTES)
+        L.append("")
     L.append("## Gates\n")
     L.append("| gate | result | measured | target |")
     L.append("|---|---|---|---|")
@@ -993,9 +1108,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("video")
     prof.add_arg(ap)
-    ap.add_argument("--kind", choices=["edit", "motion", "explainer"], default="edit",
+    ap.add_argument("--kind", choices=["edit", "motion", "explainer", "loop"], default="edit",
                     help="edit (default): footage cut to music; motion: motion graphics (strict motion gate, hold "
-                         "gate); explainer: motion + the freshness gate")
+                         "gate); explainer: motion + the freshness gate; loop: a loop or overlay piece (logo swing, "
+                         "corner bug, lower third): as motion, but the hook and end-tail gates are not run")
+    ap.add_argument("--intended", default="",
+                    help="gates that fail on purpose, e.g. \"end_tail,hook\" (hook, hook_motion, hook_strong, "
+                         "end_tail): a failure there becomes an INFO line saying it was declared intended")
     ap.add_argument("--holds", default="", help='intentional stills: "a-b,start:N,end:N" seconds (as motion_check)')
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--cuts", help='planned cut times in seconds, "1.5,4.2" ("none" = no cuts planned)')
@@ -1014,6 +1133,11 @@ def main(argv=None):
     a = ap.parse_args(argv)
     a._argv = [x if " " not in x else f'"{x}"' for x in (argv if argv is not None else sys.argv[1:])]
     kind = a.kind
+    try:
+        intended = parse_intended(a.intended)
+    except SystemExit as e:                              # a usage error: exit 2 like any other bad argument
+        ap.error(str(e.code)[len("qa: "):] if str(e.code).startswith("qa: ") else str(e.code))
+    del NOTES[:]
 
     try:
         P = prof.load(a.profile)
@@ -1050,9 +1174,9 @@ def main(argv=None):
         flash_events = gate_flashes(R, V, planned_f or [])
         cuts_table = gate_cuts(R, V, cuts, planned_f, flash_events)
         cuts_ok = [(c, s, gg) for c, s, gg in cuts if any(r["frame"] == c for r in cuts_table)]
-        if kind in ("motion", "explainer"):
+        if kind in ("motion", "explainer", "loop"):
             gate_pops(R, V, cuts, flash_events)
-        gate_hook_holds(R, V, cuts_ok, kind, a.max_scene, holds)
+        gate_hook_holds(R, V, cuts_ok, kind, a.max_scene, holds, intended)
         fresh = gate_freshness(R, V, cuts_ok, a.max_scene) if kind == "explainer" else None
         A = None
         if info["audio"]:
@@ -1066,8 +1190,10 @@ def main(argv=None):
 
         nfail = sum(1 for x in R.flags if x["sev"] == "FAIL")
         nwarn = sum(1 for x in R.flags if x["sev"] == "WARN")
-        verdict = (f"FAIL ({nfail} fail, {nwarn} warning)" if nfail else
-                   f"PASS ({nwarn} warning{'s' if nwarn != 1 else ''})")
+        ninfo = sum(1 for x in R.flags if x["sev"] == "INFO")
+        verdict = (f"FAIL ({nfail} fail, {nwarn} warning" if nfail else
+                   f"PASS ({nwarn} warning{'s' if nwarn != 1 else ''}") + \
+            (f", {ninfo} declared intended)" if ninfo else ")")
         sheet = os.path.join(a.out, "sheet.jpg")
         sheet_note = "sheet skipped"
         if not a.no_sheet:
@@ -1090,6 +1216,7 @@ def main(argv=None):
                                                                                          "duration": n / fps},
                   "loudness": A["loud"] if A is not None else None,
                   "planned_cuts": planned_t, "cuts": cuts_table, "freshness_events": fresh,
+                  **({"intended": sorted(intended)} if intended else {}), **({"notes": list(NOTES)} if NOTES else {}),
                   "gates": R.gates, "flags": R.sorted_flags(), "fix_lines": [R.line(x) for x in R.sorted_flags()]}
         with open(os.path.join(a.out, "qa.json"), "w") as fh:
             json.dump(result, fh, indent=2, default=float)

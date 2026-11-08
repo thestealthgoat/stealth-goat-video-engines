@@ -15,10 +15,13 @@ Use from a tool:
 Values may use {repo} (this folder), {profile} (the profile's folder), {home} and any key under "paths"
 (e.g. "{assets}/Music"). "path_map" is a list of ["/Volumes/ACME", "/mnt/acme"] pairs: a path
 under the left side is rewritten to the right side only when the left side is missing and the right side exists.
+"optional_paths" is a list of "paths" keys that only exist on some machines (e.g. a Dropbox folder under one
+person's home): `show --check` lists them as "optional, missing here" when they are absent, without failing.
 
 CLI:
     python3 engine/vprofile.py list
     python3 engine/vprofile.py show acme [--check]       # --check: every font and folder exists on this machine
+                                                         #   (optional_paths missing here are listed, not failed)
     python3 engine/vprofile.py new <name> --primary "#123456" --accent "#ABCDEF" [--head-font F --body-font F]
                                   [--logo logo.svg] [--root /path/to/org] [--sample]   # --sample renders a test card
     python3 engine/vprofile.py default acme             # writes local.json (machine-only, not committed)
@@ -154,14 +157,36 @@ class Profile:
                 return dst + p[len(src):]
         return p
 
+    def optional_paths(self):
+        """The "paths" keys the profile marks as machine-only (top-level "optional_paths" list)."""
+        opt = self.data.get("optional_paths", [])
+        if isinstance(opt, str):
+            return {opt}                    # one key written without the list brackets
+        return {k for k in opt if isinstance(k, str)} if isinstance(opt, list) else set()
+
+    def check_optional(self):
+        """Optional (machine-only) paths that are missing on this machine: reported, never a failure."""
+        return [f"path {k}: {v}" for k, v in self._paths.items()
+                if k in self.optional_paths() and not os.path.exists(v)]
+
     def check(self):
-        """List of problems on this machine (missing fonts, folders, assets)."""
+        """List of problems on this machine (missing fonts, folders, assets). Paths listed in "optional_paths"
+        are not problems when missing (see check_optional()); a name there that is not a "paths" key is one."""
         bad = []
         for role in self.get("brand.fonts", {}):
             f = self.font(role)
             if not os.path.isfile(f):
                 bad.append(f"font {role}: {f}")
+        opt = self.optional_paths()
+        raw_opt = self.data.get("optional_paths", [])
+        if not isinstance(raw_opt, (list, str)) or (isinstance(raw_opt, list)
+                                                    and not all(isinstance(k, str) for k in raw_opt)):
+            bad.append(f"optional_paths should be a list of paths keys, e.g. [\"dropbox\"] (got {raw_opt!r})")
+        for k in sorted(opt - set(self._paths)):
+            bad.append(f"optional_paths names {k!r}, which is not a paths key (have: {', '.join(sorted(self._paths))})")
         for k, v in self._paths.items():
+            if k in opt:
+                continue
             if not os.path.exists(v) and not k.endswith("_out"):   # *_out folders are made on first write
                 bad.append(f"path {k}: {v}")
         for k, v in self.get("brand", {}).items():
@@ -180,9 +205,10 @@ def load(name=None):
                            "`python3 engine/vprofile.py default <name>`. Profiles: " + ", ".join(available()))
     if os.path.isfile(name):
         path = name
-    elif os.path.isdir(name):
+    elif os.path.isdir(name) and (os.path.isfile(os.path.join(name, "profile.json")) or os.sep in name
+                                  or not os.path.isfile(os.path.join(PROFILES, name, "profile.json"))):
         path = os.path.join(name, "profile.json")
-    else:
+    else:   # a bare name: profiles/<name>, even when the current folder happens to hold a folder of that name
         path = os.path.join(PROFILES, name, "profile.json")
     if not os.path.isfile(path):
         raise ProfileError(f"profile {name!r} not found (looked for {path}). Profiles: " + ", ".join(available()))
@@ -255,9 +281,13 @@ def main(argv=None):
         print(f"{P.name}  ({P.folder})")
         for role in P.get("brand.colors"): print(f"  color {role:10s} {P.color(role)}")
         for role in P.get("brand.fonts"): print(f"  font  {role:10s} {P.font(role)}")
-        for k in sorted(P._paths): print(f"  path  {k:14s} {P.path(k)}")
+        opt = P.optional_paths()
+        for k in sorted(P._paths):
+            print(f"  path  {k:14s} {P.path(k)}" + ("   (optional: machine-only)" if k in opt else ""))
         if a.check:
-            bad = P.check()
+            bad, miss_opt = P.check(), P.check_optional()
+            if miss_opt:
+                print("optional, missing here (fine on a machine that doesn't use them):\n  " + "\n  ".join(miss_opt))
             print("CHECK: OK" if not bad else "CHECK: missing\n  " + "\n  ".join(bad))
             sys.exit(1 if bad else 0)
     elif a.cmd == "new":

@@ -14,6 +14,10 @@ profile: pass `--profile <name>`, or it uses `$VIDEO_PROFILE` / the machine defa
 it runs with generic defaults (-14 LUFS, -1 dBTP, size not checked); offer to make one with
 `python3 engine/vprofile.py new <name>`.
 
+`python3 engine/vprofile.py show <name> --check` checks that the profile's fonts and folders exist on this machine.
+Folders the profile lists under `optional_paths` (machine-only ones, e.g. a Dropbox folder under one person's home)
+are printed as "optional, missing here" when absent and do not fail the check; anything else missing does.
+
 ## When to run
 
 - Before you show any render to the user, and before anything is delivered or uploaded.
@@ -26,8 +30,12 @@ it runs with generic defaults (-14 LUFS, -1 dBTP, size not checked); offer to ma
 # footage cut to music (reels, highlights, promos)
 python3 engine/qa.py <video> --kind edit --shotlist <out dir>/_parts/list.txt (the render's concat list) or a cuts JSON [--holds ...] [--allow-stutter]
 
-# motion graphics (cards, lower thirds, logo animations, overlays): strict motion gate + hold gate
-python3 engine/qa.py <video> --kind motion --cuts none [--holds end:1.2]
+# motion graphics (cards, lower thirds, logo animations): strict motion gate + hold gate
+python3 engine/qa.py <video> --kind motion --cuts none [--holds end:1.2] [--intended end_tail]
+
+# loops and overlay pieces (a logo swing loop, a corner bug, a "presented by" lower third): as motion, but no hook
+# and no end-tail gate (a loop has no opening or ending of its own)
+python3 engine/qa.py <video> --kind loop --cuts none
 
 # explainers: motion gates + freshness (a new visual at least every --max-scene seconds)
 python3 engine/qa.py <video> --kind explainer --cuts <planned cuts or none> [--max-scene 2.5]
@@ -35,8 +43,28 @@ python3 engine/qa.py <video> --kind explainer --cuts <planned cuts or none> [--m
 
 - `--cuts 1.5,4.2,...` or `--shotlist` (a render's `_parts/list.txt`, or a cuts JSON; not an edit list) gives the planned cuts; every other hard cut is an unplanned jump.
   `--cuts none` means no cuts are planned. Without either, cuts are only listed.
+- A concat list holds absolute part paths of the shell that rendered it (e.g. `/sessions/<id>/mnt/...` from the
+  device shell), and renderers often reuse an old list. When a listed part doesn't exist here, qa.py uses the file
+  of the same name next to the list and says so once (also under "Notes" in `review.md`). It stops, naming both
+  paths, only when neither exists; then pass `--cuts`.
 - `--holds` declares planned stills (`a-b`, `start:N`, `end:N` seconds) for the motion gate. Fixed gates still apply:
-  nothing static over 0.8 s in motion/explainer work, and the static tail is never over 1.5 s.
+  nothing static over 0.8 s in motion/explainer work, and the static tail is never over 1.5 s (unless declared
+  with `--intended end_tail`, below).
+- `--intended end_tail,hook` (names: `hook`, `hook_motion`, `hook_strong`, `end_tail`) is for a designed exception
+  that no `--holds` / `--cuts` can declare: a logo intro holding its last frame for 1.6 s, or a piece that is not
+  meant to grab a scroll. Those gates still run; a failure becomes an **INFO** line "declared intended" in the
+  fixes and the gate table and is not counted in the verdict (the verdict says how many were declared intended).
+  It is never a silent PASS. A designed end hold also needs `--holds end:N` (N = the hold in seconds), or the
+  motion gate still fails it as a dead stretch. Use it only for what the brief or the template's design asks for, and say so to the
+  user; a gate that fails without a reason is fixed, not declared.
+- `--kind loop` lists the hook and end-tail gates as SKIP with their measurement; dead stretches, stutters, holds
+  without life, pops, spec and audio are still gated.
+- Frame rate: the profile's `delivery.fps` plus `delivery.fps_allowed` (other rates it delivers, e.g. 59.94 reels
+  made of 29.97 material) are accepted; `--fps N` replaces both with exactly N (e.g. `--fps 60` for a 60p overlay).
+  The rate is the file's average; when the average misses but the file declares an accepted constant rate
+  (`r_frame_rate`) within 0.5%, spec is judged on the declared rate and the average is a **WARN**: the file has
+  timestamp gaps or uneven frames (look at the stutter flags and the part joins), so treat it as a real issue to
+  judge, not noise.
 - Repeats on a regular cadence (29.97 material in a 59.94 file, 3:2 pulldown, a steady slow-motion conform) are
   recognised and reported once as a cadence note, not as stutters; a repeat that breaks the cadence is still a
   stutter. `--allow-stutter` (skip the repeat check) only when irregular repeats are there on purpose.
@@ -49,7 +77,8 @@ one frame per shot with the safe area drawn, evidence strips before | flagged | 
 Gates measured: spec and clean decode; dead stretches and stutters; hard audio cuts at every cut; integrated LUFS
 (+-1 LU) and true peak; unplanned cuts (scdet); 1-2 frame flashes and foreign frames; one-frame pops (warning);
 audio clicks, dropouts and silence >= 0.5 s; something moves in the first 0.5 s; a strong moment (cut or big move)
-by 2 s; no hold over 0.8 s without life; end card / static tail <= 1.5 s; explainer freshness.
+by 2 s; no hold over 0.8 s without life; end card / static tail <= 1.5 s; explainer freshness. Gate results are
+PASS, WARN, FAIL, SKIP (not run, e.g. no audio or `--kind loop`) or INFO (declared intended with `--intended`).
 
 ## 2. Read the review and the sheet
 
@@ -57,7 +86,8 @@ by 2 s; no hold over 0.8 s without life; end card / static tail <= 1.5 s; explai
 2. `Read` `sheet.jpg`. Look at one frame per shot: composition, faces, text, contact.
 3. For every FAIL and WARN, open its evidence strip and judge it by frame: **real**, **intended** or
    **false alarm**. Write the judgement next to the flag in `review.md`. Intended things (a planned flash cut, a
-   declared hold) go into the cut list or `--holds` and the run is repeated, so the record stays clean.
+   declared hold) go into the cut list or `--holds` (a designed end hold or a deliberately soft opening into
+   `--intended`, a loop or overlay into `--kind loop`) and the run is repeated, so the record stays clean.
 4. Do the manual checks the machine cannot (listed in `review.md`), cropping frames with ffmpeg where needed:
    text at least 24 px from the edges and inside the profile's safe area (the cyan box), never over a face or other
    text, readable at phone size; every cut has a visible cause; no decorative wipes, inverts, added shake or light

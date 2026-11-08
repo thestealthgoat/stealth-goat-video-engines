@@ -15,6 +15,9 @@ Rules it keeps:
   * Everything goes to a log (default <DST>/_offload_<date>.log, appended) and to the terminal.
   * The last line is "<LABEL>_COMPLETE copied N skipped M ..." (LABEL defaults to ALL, so ALL_COMPLETE), or
     "<LABEL>_INCOMPLETE ..." with exit code 1 when anything failed. Other scripts can wait on that line.
+    A problem that stops the run (source missing, destination inside the source, a bad date, an unreadable
+    --files-from list, ...) logs "FATAL: <reason>" and "<LABEL>_INCOMPLETE FATAL: <reason>" (exit 2), when there is
+    a log to write: --log, or the default one in DST when DST already exists (never inside SRC, never on --dry-run).
   * On macOS the Mac is kept awake (caffeinate) while it runs.
 
 SRC may be a profile card name (e.g. "ninja", "eos" -> profile cards.ninja / cards.eos).
@@ -231,6 +234,19 @@ def histogram(items, log):
         log(f"{d} {n[d]} files {sz[d] / 1e9:.1f} GB")
 
 
+def fatal(why, log_path, label, src_dir):
+    """A problem that stops the run: to stderr, and to the log (when it may be written) with the summary line."""
+    print(f"FATAL: {why}", file=sys.stderr)
+    if log_path and not inside(log_path, src_dir):
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
+            with open(log_path, "a") as f:
+                f.write(f"FATAL: {why}\n{label}_INCOMPLETE FATAL: {why} {now()}\n")
+        except OSError:
+            pass
+    return 2
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -261,15 +277,16 @@ def main(argv=None):
 
     src = os.path.abspath(os.path.expanduser(resolve_src(a.src, a.profile)))
     dst = os.path.abspath(os.path.expanduser(a.dst))
+    log_path = None if a.dry_run else (a.log or os.path.join(dst, f"_offload_{dt.date.today().isoformat()}.log"))
+    early_log = log_path if (a.log or os.path.isdir(dst)) else None    # never create DST just for a failure log
     if not os.path.exists(src):
-        print(f"FATAL: source not found: {src}", file=sys.stderr); return 2
+        return fatal(f"source not found: {src}", early_log, a.label, src)
     src_dir = src if os.path.isdir(src) else os.path.dirname(src)
     if inside(dst, src_dir):
-        print(f"FATAL: destination {dst} is inside the source {src_dir} (the source is read-only)", file=sys.stderr)
-        return 2
-    log_path = None if a.dry_run else (a.log or os.path.join(dst, f"_offload_{dt.date.today().isoformat()}.log"))
+        return fatal(f"destination {dst} is inside the source {src_dir} (the source is read-only)", early_log,
+                     a.label, src_dir)
     if log_path and inside(log_path, src_dir):
-        print("FATAL: the log may not be written inside the source", file=sys.stderr); return 2
+        return fatal("the log may not be written inside the source", None, a.label, src_dir)
     if not a.dry_run:
         os.makedirs(dst, exist_ok=True)
         if log_path:
@@ -278,57 +295,66 @@ def main(argv=None):
     awake = keep_awake(not a.no_caffeinate and not a.dry_run)
     exts = {e.strip().lower().lstrip(".") for e in (a.ext or "").split(",") if e.strip()}
 
-    log(f"START {now()} {a.label} {src} -> {dst}" + (" (check only)" if a.check_only else "")
-        + (" (dry run)" if a.dry_run else ""))
-    items, every = list_sources(src, a, exts)
-    if a.histogram:
-        histogram(every, log)            # the whole card (before the date filter), to see which days are on it
-    log(f"LIST {len(items)}")
+    try:
+        log(f"START {now()} {a.label} {src} -> {dst}" + (" (check only)" if a.check_only else "")
+            + (" (dry run)" if a.dry_run else ""))
+        items, every = list_sources(src, a, exts)
+        if a.histogram:
+            histogram(every, log)            # the whole card (before the date filter), to see which days are on it
+        log(f"LIST {len(items)}")
 
-    copied = skipped = failed = conflicts = 0; nbytes = 0; t0 = time.time()
-    for k, (sp, rel) in enumerate(items, 1):
-        dp = os.path.join(dst, os.path.basename(rel) if a.flat else rel)
-        if not os.path.isfile(sp):
-            failed += 1; log(f"FAIL {rel} (missing at source)"); continue
+        copied = skipped = failed = conflicts = 0; nbytes = 0; t0 = time.time()
+        for k, (sp, rel) in enumerate(items, 1):
+            dp = os.path.join(dst, os.path.basename(rel) if a.flat else rel)
+            if not os.path.isfile(sp):
+                failed += 1; log(f"FAIL {rel} (missing at source)"); continue
+            if a.check_only:
+                ok = os.path.isfile(dp) and os.path.getsize(dp) == os.path.getsize(sp)
+                if not ok:
+                    failed += 1; log(f"SIZEBAD {rel}"); continue
+                if (k % max(1, a.sample)) == 0 and a.verify != "size" and not verify(sp, dp, a.verify):
+                    failed += 1; log(f"CMPBAD {rel}"); continue
+                skipped += 1
+                continue
+            if a.dry_run:
+                st = "SKIP" if os.path.isfile(dp) and os.path.getsize(dp) == os.path.getsize(sp) else \
+                     ("CONFLICT" if os.path.exists(dp) else "WOULD_COPY")
+                log(f"{st} {rel}")
+                continue
+            status, final = copy_one(sp, dp, a.verify, a.conflict)
+            if status == "SKIP" and a.verify_existing and a.verify != "size" and not verify(sp, final, a.verify):
+                status = "FAIL:existing file differs"
+            if status == "OK":
+                copied += 1; nbytes += os.path.getsize(final)
+                log(f"OK {rel}" + ("" if final == dp else f" -> {os.path.basename(final)}"))
+            elif status == "SKIP":
+                skipped += 1
+            elif status == "CONFLICT":
+                conflicts += 1; log(f"CONFLICT {rel} (a different file is already at {dp}; left alone)")
+            else:
+                failed += 1; log(f"FAIL {rel} {status[5:]}")
+            if a.progress and k % a.progress == 0:
+                log(f"{a.label} {k}/{len(items)} {hms()}")
+
+        secs = time.time() - t0
+        bad = failed + conflicts
         if a.check_only:
-            ok = os.path.isfile(dp) and os.path.getsize(dp) == os.path.getsize(sp)
-            if not ok:
-                failed += 1; log(f"SIZEBAD {rel}"); continue
-            if (k % max(1, a.sample)) == 0 and a.verify != "size" and not verify(sp, dp, a.verify):
-                failed += 1; log(f"CMPBAD {rel}"); continue
-            skipped += 1
-            continue
-        if a.dry_run:
-            st = "SKIP" if os.path.isfile(dp) and os.path.getsize(dp) == os.path.getsize(sp) else \
-                 ("CONFLICT" if os.path.exists(dp) else "WOULD_COPY")
-            log(f"{st} {rel}")
-            continue
-        status, final = copy_one(sp, dp, a.verify, a.conflict)
-        if status == "SKIP" and a.verify_existing and a.verify != "size" and not verify(sp, final, a.verify):
-            status = "FAIL:existing file differs"
-        if status == "OK":
-            copied += 1; nbytes += os.path.getsize(final)
-            log(f"OK {rel}" + ("" if final == dp else f" -> {os.path.basename(final)}"))
-        elif status == "SKIP":
-            skipped += 1
-        elif status == "CONFLICT":
-            conflicts += 1; log(f"CONFLICT {rel} (a different file is already at {dp}; left alone)")
-        else:
-            failed += 1; log(f"FAIL {rel} {status[5:]}")
-        if a.progress and k % a.progress == 0:
-            log(f"{a.label} {k}/{len(items)} {hms()}")
-
-    secs = time.time() - t0
-    bad = failed + conflicts
-    if a.check_only:
-        log(f"VERIFY {len(items)} files, bad {failed}" + (f" (byte-compared every {a.sample})" if a.sample > 1 else ""))
-    summary = (f"copied {copied} skipped {skipped} failed {failed} conflicts {conflicts} "
-               f"{nbytes / 1e9:.2f} GB {secs:.0f}s {now()}")
-    log(f"{a.label}_{'INCOMPLETE' if bad else 'COMPLETE'} {summary}")
-    log.close()
-    if awake:
-        awake.terminate()
-    return 1 if bad else 0
+            log(f"VERIFY {len(items)} files, bad {failed}" + (f" (byte-compared every {a.sample})" if a.sample > 1 else ""))
+        summary = (f"copied {copied} skipped {skipped} failed {failed} conflicts {conflicts} "
+                   f"{nbytes / 1e9:.2f} GB {secs:.0f}s {now()}")
+        log(f"{a.label}_{'INCOMPLETE' if bad else 'COMPLETE'} {summary}")
+        return 1 if bad else 0
+    except SystemExit as e:              # e.g. a bad --since/--until: the reason in the log, not only in the Terminal
+        log(f"FATAL: {e.code}"); log(f"{a.label}_INCOMPLETE FATAL: {e.code} {now()}"); return 2
+    except KeyboardInterrupt:
+        log("FATAL: interrupted"); log(f"{a.label}_INCOMPLETE FATAL: interrupted {now()}"); return 130
+    except Exception as e:               # an unreadable --files-from list, a vanished card, ...
+        why = f"{type(e).__name__}: {e}"
+        log(f"FATAL: {why}"); log(f"{a.label}_INCOMPLETE FATAL: {why} {now()}"); return 2
+    finally:
+        log.close()
+        if awake:
+            awake.terminate()
 
 
 if __name__ == "__main__":

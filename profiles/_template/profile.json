@@ -1,7 +1,7 @@
 {
   "name": "_template",
   "display_name": "New profile",
-  "about": "Copy made by `python3 engine/vprofile.py new <name>`. Replace every value; leave out what the org doesn't have.",
+  "about": "Copy made by `python3 engine/vprofile.py new <name>`. Replace every value; leave out what the org doesn't have. optional_paths: paths keys that exist only on some machines (show --check lists them as optional instead of failing). delivery.fps_allowed: other file rates qa.py accepts besides delivery.fps (e.g. 59.94 for reels made of 29.97 material shown at 2x).",
   "brand": {
     "colors": { "primary": "#1A1A1A", "accent": "#E0E0E0", "text": "#FFFFFF" },
     "fonts": {
@@ -13,8 +13,9 @@
   },
   "team": { "home_abbr": "", "home_name": "", "foot": "" },
   "paths": { "root": "{home}/Movies/video-work", "assets": "{root}/Assets", "music": "{assets}/Music" },
+  "optional_paths": [],
   "path_map": [],
-  "delivery": { "size": "1920x1080", "fps": 29.97002997, "vertical_size": "1080x1920", "loudness_lufs": -14, "true_peak_db": -2,
+  "delivery": { "size": "1920x1080", "fps": 29.97002997, "fps_allowed": [], "vertical_size": "1080x1920", "loudness_lufs": -14, "true_peak_db": -2,
                 "outputs": ["mp4", "premiere_xml"] },
   "layout": { "safe_px": 90 },
   "style": { "audio_fade_ms": 40, "springs_default": "snappy" },
