@@ -1,0 +1,7 @@
+{
+  "num": 12,
+  "name": "Player Name",
+  "big": "3 TDS",
+  "stats": [["CAR", "21"], ["YDS", "148"], ["LONG", "54"]],
+  "note": "Copy this file per player and fill it in by hand. 'stats' takes 2-4 [label, value] pairs. Optional: 'photo' (cutout PNG; default <profile paths.headshot_cutouts>/<num>.png), 'count': false (no count-up), 'logo': false (hide the profile logo). Render: python3 engine/statcard.py <this file> <out dir> --profile <name>"
+}

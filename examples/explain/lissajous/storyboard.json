@@ -1,0 +1,585 @@
+{
+ "topic": "Why some notes sound good together",
+ "approved": false,
+ "version": 1,
+ "audio": "linear",
+ "data": {
+  "xy": "_build/xy.json"
+ },
+ "beats": [
+  {
+   "say": "This is what a perfect fifth looks like.",
+   "key": "fifth",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "eyebrow",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "TWO NOTES, ONE ON EACH AXIS",
+     "x": 0.5,
+     "y": 0.08
+    },
+    {
+     "id": "hit",
+     "type": "burst",
+     "x": 0.4,
+     "y": 0.47,
+     "at": 0.05,
+     "r": 0.42
+    },
+    {
+     "id": "notes",
+     "type": "text",
+     "role": "title",
+     "text": "A + E",
+     "x": 0.78,
+     "y": 0.45,
+     "size": 0.07,
+     "in": 1.4
+    }
+   ],
+   "t0": 0.0,
+   "t1": 3.463
+  },
+  {
+   "say": "One note moves the dot sideways,",
+   "key": "sideways",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "slow",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "SLOWED WAY DOWN",
+     "x": 0.4,
+     "y": 0.08,
+     "in": 0.2
+    },
+    {
+     "id": "lab_x",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "NOTE 1 →",
+     "x": 0.4,
+     "y": 0.8099999999999999,
+     "in": 1.0
+    }
+   ],
+   "t0": 3.463,
+   "t1": 6.185
+  },
+  {
+   "say": "the other moves it up and down.",
+   "key": "up",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "slow",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "SLOWED WAY DOWN",
+     "x": 0.4,
+     "y": 0.08
+    },
+    {
+     "id": "lab_y",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "NOTE 2 ↑",
+     "x": 0.13,
+     "y": 0.47,
+     "in": 1.0
+    }
+   ],
+   "t0": 6.185,
+   "t1": 9.278
+  },
+  {
+   "say": "Same note twice: a still circle.",
+   "key": "circle",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "UNISON",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "1 : 1",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot",
+     "in": 0.3
+    }
+   ],
+   "t0": 9.278,
+   "t1": 12.0
+  },
+  {
+   "say": "An octave: twice as fast, a figure eight.",
+   "key": "octave",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "OCTAVE",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "2 : 1",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot",
+     "in": 0.3
+    },
+    {
+     "id": "loops",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "2 LOOPS ACROSS, 1 UP",
+     "x": 0.78,
+     "y": 0.62,
+     "in": 1.6
+    }
+   ],
+   "t0": 12.0,
+   "t1": 15.463
+  },
+  {
+   "say": "A fifth: three against two.",
+   "key": "three",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "FIFTH",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "3 : 2",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot",
+     "in": 0.3
+    }
+   ],
+   "t0": 15.463,
+   "t1": 17.815
+  },
+  {
+   "say": "Small numbers, simple shapes, and they sound smooth.",
+   "key": "smooth",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "FOURTH",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "4 : 3",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot",
+     "in": 0.3
+    }
+   ],
+   "changes": [
+    {
+     "at": 1.6,
+     "id": "name",
+     "set": {
+      "text": "MAJOR THIRD"
+     }
+    },
+    {
+     "at": 1.6,
+     "id": "ratio",
+     "set": {
+      "text": "5 : 4"
+     }
+    }
+   ],
+   "t0": 17.815,
+   "t1": 21.278
+  },
+  {
+   "say": "A tritone is forty five against thirty two.",
+   "key": "tritone",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "TRITONE",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "45 : 32",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot",
+     "in": 0.3
+    },
+    {
+     "id": "loops",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "45 LOOPS BEFORE IT REPEATS",
+     "x": 0.78,
+     "y": 0.62,
+     "in": 1.5
+    }
+   ],
+   "t0": 21.278,
+   "t1": 24.741
+  },
+  {
+   "say": "It never settles, and it sounds tense.",
+   "key": "tense",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "TRITONE",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "45 : 32",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot",
+     "in": 0.0
+    },
+    {
+     "id": "never",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "NEVER REPEATS IN VIEW",
+     "x": 0.78,
+     "y": 0.62,
+     "in": 0.8
+    }
+   ],
+   "t0": 24.741,
+   "t1": 27.833
+  },
+  {
+   "say": "Here's the twist: a piano's fifth isn't three to two.",
+   "key": "twist",
+   "drop": true,
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "PIANO FIFTH",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "1 : 1.5000",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot"
+    }
+   ],
+   "changes": [
+    {
+     "at": 1.8,
+     "id": "ratio",
+     "set": {
+      "text": "1 : 1.4983"
+     }
+    }
+   ],
+   "t0": 27.833,
+   "t1": 32.037
+  },
+  {
+   "say": "It's tuned a hair flat, so the shape slowly turns.",
+   "key": "turns",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "role": "title",
+     "text": "PIANO FIFTH",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.075,
+     "in": 0.0
+    },
+    {
+     "id": "ratio",
+     "type": "text",
+     "role": "body",
+     "text": "1 : 1.4983",
+     "x": 0.78,
+     "y": 0.52,
+     "size": 0.05,
+     "color": "hot"
+    },
+    {
+     "id": "beat",
+     "type": "readout",
+     "label": "IT TURNS",
+     "value": 0,
+     "decimals": 2,
+     "unit": "Hz",
+     "x": 0.78,
+     "y": 0.72,
+     "size": 0.05
+    },
+    {
+     "id": "period",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "ONE TURN EVERY 1.34 S",
+     "x": 0.78,
+     "y": 0.7999999999999999,
+     "in": 2.0
+    }
+   ],
+   "changes": [
+    {
+     "at": 0.3,
+     "id": "beat",
+     "set": {
+      "value": 0.74
+     }
+    }
+   ],
+   "t0": 32.037,
+   "t1": 36.241
+  },
+  {
+   "say": "Which interval should we draw next?",
+   "key": "next",
+   "show": [
+    {
+     "id": "liss",
+     "type": "scope",
+     "mode": "xy",
+     "src": "xy",
+     "color": "text",
+     "x": 0.4,
+     "y": 0.47,
+     "w": 0.36,
+     "h": 0.62,
+     "trail": 3
+    },
+    {
+     "id": "end",
+     "type": "text",
+     "role": "title",
+     "text": "NEXT?",
+     "x": 0.78,
+     "y": 0.4,
+     "size": 0.09
+    },
+    {
+     "id": "ask",
+     "type": "text",
+     "role": "eyebrow",
+     "text": "TELL ME IN THE COMMENTS",
+     "x": 0.78,
+     "y": 0.52,
+     "in": 1.2
+    }
+   ],
+   "t0": 36.241,
+   "t1": 38.963
+  }
+ ],
+ "drop_at": 27.833,
+ "duration": 39.563,
+ "measured": {
+  "base_hz": 220.0,
+  "et_fifth_ratio": 1.49831,
+  "et_fifth_beat_hz": 0.745
+ }
+}

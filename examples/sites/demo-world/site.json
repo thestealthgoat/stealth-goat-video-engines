@@ -1,0 +1,135 @@
+{
+  "template": "w2",
+  "profile": "demo",
+  "title": "How a live stream reaches you | ACME TV",
+  "description": "Follow an ACME TV live stream from the cameras at the event, through the production switcher and the encoder, out over the internet to people watching at home.",
+  "brand_text": "ACME TV",
+  "business": {
+    "legal_name": "ACME TV",
+    "email": "hello@example.com"
+  },
+  "legal": {
+    "effective": "2026-11-09"
+  },
+  "nav": [
+    {
+      "id": "how",
+      "label": "The path"
+    },
+    {
+      "id": "watch",
+      "label": "Watch"
+    },
+    {
+      "id": "faq",
+      "label": "FAQ"
+    }
+  ],
+  "hero": {
+    "id": "how",
+    "label": "How a live stream reaches you",
+    "eyebrow": "ACME TV · Live",
+    "headline": [
+      "From the event",
+      "to your screen"
+    ],
+    "text": "A live stream passes through a few hands and a few machines before it reaches you. Here is the path the picture takes, one step at a time.",
+    "cta": {
+      "label": "Where to watch",
+      "href": "#watch"
+    },
+    "short": "Start",
+    "scenes": [
+      {
+        "kind": "field",
+        "short": "Cameras",
+        "title": "Cameras around the venue",
+        "text": "Camera operators at different spots around the venue each follow the action from their own angle. Every camera sends its picture to the control room."
+      },
+      {
+        "kind": "switcher",
+        "short": "Switcher",
+        "title": "The production switcher",
+        "text": "In the control room, the switcher operator sees every camera at once and chooses which picture goes out live. Replays and on-screen graphics are added here too."
+      },
+      {
+        "kind": "encoder",
+        "short": "Encoder",
+        "title": "The encoder",
+        "text": "The finished program leaves the switcher as one video signal. The encoder compresses it into a stream small enough to send over the internet."
+      },
+      {
+        "kind": "stream",
+        "short": "Stream",
+        "title": "The stream",
+        "text": "The stream travels over the internet to the services that carry it. They make a copy for everyone who presses play, wherever they are."
+      },
+      {
+        "kind": "home",
+        "short": "At home",
+        "title": "People watching at home",
+        "text": "A few seconds later, the picture reaches TVs, phones and laptops at home, on whichever service you watch.",
+        "cta": {
+          "label": "Where to watch",
+          "href": "#watch"
+        }
+      }
+    ]
+  },
+  "sections": [
+    {
+      "type": "text",
+      "id": "about",
+      "eyebrow": "About",
+      "title": "A small live crew",
+      "paragraphs": [
+        "ACME TV is a made-up channel used to show how this site template works. Replace this text with a few lines about your own crew and what you stream."
+      ]
+    },
+    {
+      "type": "features",
+      "id": "watch",
+      "eyebrow": "Watch",
+      "title": "Where to watch",
+      "items": [
+        {
+          "title": "Your channel",
+          "text": "Name the channel or service where your stream plays."
+        },
+        {
+          "title": "Video platform",
+          "text": "Add a link to your channel page on a video platform.",
+          "href": "https://example.com/live",
+          "link": "example.com/live"
+        },
+        {
+          "title": "Social page",
+          "text": "Add a link to the page where you post live.",
+          "href": "https://example.com/social",
+          "link": "example.com/social"
+        }
+      ]
+    },
+    {
+      "type": "faq",
+      "id": "faq",
+      "eyebrow": "Questions",
+      "title": "Good to know",
+      "items": [
+        {
+          "q": "Why does the stream run a little behind the live action?",
+          "a": "Every step adds a little time: switching, encoding and carrying the stream across the internet. A short delay is normal for any live stream."
+        },
+        {
+          "q": "What does the switcher operator do?",
+          "a": "They watch every camera at once and choose which picture you see, cutting between angles as the action develops."
+        },
+        {
+          "q": "Can I watch on my phone?",
+          "a": "Yes. Most streaming services play in their phone apps and in a phone's web browser."
+        }
+      ]
+    }
+  ],
+  "credits": "3D scene drawn in code from simple shapes (three.js, MIT licence). No photos."
+}

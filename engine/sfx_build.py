@@ -27,6 +27,8 @@ def onepole_lp(x, fc):
 
 
 def main():
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print(__doc__); return
     out = sys.argv[1]
     bpm, nb, tail = arg('--bpm', 152), int(arg('--beats', 8)), arg('--tail', 2.2)
     beat = 60 / bpm; T = nb * beat; n = int((T + tail) * SR)

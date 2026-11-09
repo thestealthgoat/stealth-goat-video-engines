@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" fill="none" stroke="#fff" stroke-width="4">
+  <!-- S1 placeholder story (drawn in code from simple shapes, no AI art): three scenes, one per <g>.
+       Replace with your own story: one <g> per scene, any line art. -->
+  <g id="sunrise">
+    <path d="M40 220 H260"/>
+    <path d="M90 220 A60 60 0 0 1 210 220"/>
+    <path d="M150 140 V110 M105 155 L85 135 M195 155 L215 135 M75 195 L50 185 M225 195 L250 185"/>
+  </g>
+  <g id="home">
+    <path d="M360 230 V150 L450 90 L540 150 V230 Z"/>
+    <path d="M425 230 V180 H475 V230"/>
+    <path d="M380 165 H410 V190 H380 Z M490 165 H520 V190 H490 Z"/>
+  </g>
+  <g id="the-road-ahead">
+    <path d="M640 240 C700 200 760 230 820 180"/>
+    <path d="M800 170 V70 M800 72 L840 86 L800 100"/>
+    <path d="M650 250 C710 215 770 245 830 195"/>
+  </g>
+</svg>

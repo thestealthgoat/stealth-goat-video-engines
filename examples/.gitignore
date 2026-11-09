@@ -1,0 +1,2 @@
+# the root .gitignore keeps your own sites/ out of git; these example sites are part of the engine
+!sites/

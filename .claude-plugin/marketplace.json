@@ -1,0 +1,17 @@
+{
+  "name": "stealth-goat",
+  "owner": { "name": "thestealthgoat" },
+  "metadata": { "description": "Open-source video engine and UI kit plugins for Claude." },
+  "plugins": [
+    {
+      "name": "video-engine",
+      "source": "./plugins/video-engine",
+      "description": "Logos, explainers, mattes, motion graphics, edits and a QA gate, on a local open-source engine."
+    },
+    {
+      "name": "ui-kit",
+      "source": "./plugins/ui-kit",
+      "description": "Brand tokens with measured contrast, spring UI motion, accessible components, and one-page websites."
+    }
+  ]
+}

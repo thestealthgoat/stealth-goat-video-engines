@@ -21,6 +21,8 @@ def arg(k, d=None):
     return a[a.index(k) + 1] if k in a else d
 
 
+if any(x in ('-h', '--help') for x in sys.argv[1:]):   # help before the profile loads
+    print(__doc__); sys.exit(0)
 P = prof.load(arg('--profile'))
 
 
@@ -88,6 +90,7 @@ def overlay_png(path, fd, logo, kicker, head, sub, foot, sponsor):
 
 def main():
     src, out = sys.argv[1], sys.argv[2]
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     assets, fd = arg('--assets'), arg('--fontdir')
     png = os.path.splitext(out)[0] + '_overlay.png'
     overlay_png(png, fd, brand_asset(assets, 'brand.logo_png'), arg('--kicker'), arg('--head'), arg('--sub'),

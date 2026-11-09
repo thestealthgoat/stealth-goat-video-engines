@@ -3,7 +3,11 @@
   "display_name": "New profile",
   "about": "Copy made by `python3 engine/vprofile.py new <name>`. Replace every value; leave out what the org doesn't have. optional_paths: paths keys that exist only on some machines (show --check lists them as optional instead of failing). delivery.fps_allowed: other file rates qa.py accepts besides delivery.fps (e.g. 59.94 for reels made of 29.97 material shown at 2x).",
   "brand": {
-    "colors": { "primary": "#1A1A1A", "accent": "#E0E0E0", "text": "#FFFFFF" },
+    "colors": {
+      "primary": "#1A1A1A",
+      "accent": "#E0E0E0",
+      "text": "#FFFFFF"
+    },
     "fonts": {
       "head": "{repo}/resources/fonts/BebasNeue-Regular.ttf",
       "body": "{repo}/resources/fonts/BarlowCondensed-Bold.ttf",
@@ -11,13 +15,129 @@
     },
     "watch_line": ""
   },
-  "team": { "home_abbr": "", "home_name": "", "foot": "" },
-  "paths": { "root": "{home}/Movies/video-work", "assets": "{root}/Assets", "music": "{assets}/Music" },
+  "team": {
+    "home_abbr": "",
+    "home_name": "",
+    "foot": ""
+  },
+  "paths": {
+    "root": "{home}/Movies/video-work",
+    "assets": "{root}/Assets",
+    "music": "{assets}/Music"
+  },
   "optional_paths": [],
   "path_map": [],
-  "delivery": { "size": "1920x1080", "fps": 29.97002997, "fps_allowed": [], "vertical_size": "1080x1920", "loudness_lufs": -14, "true_peak_db": -2,
-                "outputs": ["mp4", "premiere_xml"] },
-  "layout": { "safe_px": 90 },
-  "style": { "audio_fade_ms": 40, "springs_default": "snappy" },
-  "folders": { "read_only": [], "write_into": "" }
+  "delivery": {
+    "size": "1920x1080",
+    "fps": 29.97002997,
+    "fps_allowed": [],
+    "vertical_size": "1080x1920",
+    "loudness_lufs": -14,
+    "true_peak_db": -2,
+    "outputs": [
+      "mp4",
+      "premiere_xml"
+    ],
+    "web": {
+      "vcodec": "libx264",
+      "vcodec_fallback": "libx264",
+      "fallback_args": [
+        "-preset",
+        "fast"
+      ],
+      "profile": "high",
+      "b_v": "12M",
+      "maxrate": "14M",
+      "bufsize": "24M",
+      "acodec": "copy",
+      "faststart_max_gb": 10
+    }
+  },
+  "layout": {
+    "safe_px": 90
+  },
+  "style": {
+    "audio_fade_ms": 40,
+    "springs_default": "snappy"
+  },
+  "captions": {
+    "font": "body",
+    "font_index": 0,
+    "size": 76,
+    "size_vertical": 84,
+    "uppercase": false,
+    "text": "text",
+    "stroke": "#000000",
+    "stroke_width": 5,
+    "shadow": 0.55,
+    "box_color": "accent",
+    "box_width": 6,
+    "box_fill": "#000000A6",
+    "box_radius": 14,
+    "box_pad": [
+      16,
+      6
+    ],
+    "y": 0.82,
+    "y_vertical": 0.7,
+    "max_width": 0.78,
+    "max_width_vertical": 0.86,
+    "band_y_vertical": 520,
+    "spring": "snappy"
+  },
+  "talkedit": {
+    "cut": {
+      "max_pause": 0.4,
+      "keep_pause": 0.2,
+      "fade_ms": 40,
+      "min_after_word": 0.03,
+      "fillers": [
+        "um",
+        "umm",
+        "uh",
+        "uhh",
+        "uhm",
+        "er",
+        "erm",
+        "ah",
+        "hmm",
+        "hm",
+        "mm",
+        "mhm"
+      ]
+    },
+    "zoom": {
+      "punch_on_cuts": true,
+      "punch_scale": 1.08,
+      "min_hold_s": 1.0,
+      "push_add": 0.07,
+      "push_every_s": 8.0,
+      "push_min_gap_s": 4.0,
+      "spring": "smooth",
+      "max_scale": 1.22
+    },
+    "captions": {
+      "on": true
+    },
+    "cards": {
+      "on": true,
+      "per_min": 1.0,
+      "min_gap_s": 25.0,
+      "min_s": 1.3,
+      "max_s": 2.2,
+      "bg": "primary",
+      "text": "text",
+      "accent": "accent",
+      "font": "head",
+      "spring": "smooth"
+    },
+    "music": {
+      "gain_db": -24.0,
+      "snap_s": 0.35
+    }
+  },
+  "folders": {
+    "read_only": [],
+    "write_into": ""
+  }
 }

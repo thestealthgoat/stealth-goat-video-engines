@@ -17,7 +17,9 @@ team abbreviation in library file names (team.home_abbr) come from it.
       in numbers.json is skipped.
   (Mac)  fullcrop.py <Games dir> cut_requests.json <crops dir>      full-res JPEG crop of each requested player
   cutouts.py cut <crops dir> <numbers.json> <out dir>               cloud: cut + grade + review sheet
-      Alpha = isnet-general-use (crisp edges) gated by u2net_human_seg (person only), biggest person kept.
+      Alpha = BiRefNet general (the most complete people: helmets, dark jerseys, hands, feet; MIT), checked against
+      BiRefNet portrait (keeps every person), biggest person kept. (Before 2026-11-09: isnet gated by u2net_human_seg,
+      which lost helmets and torsos.) Models: engine/models.py ($U2NET_HOME, local.json "rembg_models", resources/models/rembg).
       Grade A = full body; B = cut at the frame bottom (3/4); X = reject (mask disagreement IoU < 0.8, soft edge
       > 25%, more than one part, cut at the top or sides, or under 1,500 px tall). Writes <out>/png/, <out>/grades.json
       and <out>/review_N.jpg (on the primary colour). LOOK at the review sheets; --override name=A|B|X if a grade is wrong.
@@ -27,7 +29,7 @@ team abbreviation in library file names (team.home_abbr) come from it.
 """
 import sys, os, json, csv, re, shutil, collections
 import numpy as np, cv2
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'engine'))
 import vprofile as prof  # noqa: E402
 def _pop_profile():
@@ -96,11 +98,13 @@ def cut(crops, numbers, out):
     try:
         from rapidocr_onnxruntime import RapidOCR; ocr = RapidOCR()
     except Exception: ocr = None
-    N = json.load(open(numbers)); hs = new_session('u2net_human_seg'); isn = new_session('isnet-general-use')
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'engine'))
+    import models; models.rembg_home()       # where the model files live (engine/models.py)
+    N = json.load(open(numbers)); hs = new_session('birefnet-portrait'); isn = new_session('birefnet-general')
     os.makedirs(f'{out}/png', exist_ok=True); gp = f'{out}/grades.json'; G = json.load(open(gp)) if os.path.exists(gp) else {}
     for n, num in N.items():
         if n in G or not os.path.exists(f'{crops}/{n}.jpg'): continue
-        im = Image.open(f'{crops}/{n}.jpg').convert('RGB'); im.thumbnail((3000, 3000))
+        im = ImageOps.exif_transpose(Image.open(f'{crops}/{n}.jpg')).convert('RGB'); im.thumbnail((3000, 3000))   # phone photos stored sideways come upright
         a1 = np.asarray(hs.predict(im)[0].resize(im.size)).astype(np.float32) / 255
         a2 = np.asarray(isn.predict(im)[0].resize(im.size)).astype(np.float32) / 255
         gate = cv2.GaussianBlur(cv2.dilate((a1 > 0.3).astype(np.uint8), np.ones((25, 25), np.uint8)).astype(np.float32), (0, 0), 6)
@@ -109,12 +113,14 @@ def cut(crops, numbers, out):
             big = 1 + int(np.argmax(st[1:, 4])); keep = np.isin(lab, [i for i in range(1, k) if i == big or st[i, 4] > 0.25 * st[big, 4]])
             a = a * cv2.dilate(keep.astype(np.uint8), np.ones((15, 15), np.uint8))
         A = (a * 255).astype(np.uint8); rgba = im.convert('RGBA'); rgba.putalpha(Image.fromarray(A)); rgba = rgba.crop(rgba.getbbox()); rgba.save(f'{out}/png/{n}.png')
-        m1, m2 = a1 > 0.5, a > 0.5; iou = float((m1 & m2).sum() / max(1, (m1 | m2).sum()))
+        # agreement measured around the kept player only (portrait also keeps bystanders, which aren't a disagreement)
+        near = cv2.dilate((a > 0.5).astype(np.uint8), np.ones((61, 61), np.uint8)) > 0
+        m1, m2 = (a1 > 0.5) & near, a > 0.5; iou = float((m1 & m2).sum() / max(1, (m1 | m2).sum()))
         e = dict(top=(A[:3] > 128).mean() > 0.01, left=(A[:, :3] > 128).mean() > 0.03, right=(A[:, -3:] > 128).mean() > 0.03, bottom=(A[-3:] > 128).mean() > 0.02)
         semi = float(((A > 25) & (A < 230)).sum() / max(1, (A > 128).sum()))
         k2, _, st2, _ = cv2.connectedComponentsWithStats((A > 128).astype(np.uint8), 8); parts = sum(1 for i in range(1, k2) if st2[i, 4] > 0.01 * (A > 128).sum())
         grade = 'X' if (iou < 0.8 or semi > 0.25 or parts > 1 or e['top'] or e['left'] or e['right'] or rgba.size[1] < 1500) else ('B' if e['bottom'] else 'A')
-        digits = [x[1] for x in (ocr(np.asarray(im))[0] or []) if any(ch.isdigit() for ch in x[1]) and x[2] > 0.6] if ocr else []
+        digits = [x[1] for x in (ocr(np.asarray(im))[0] or []) if any(ch.isdigit() for ch in x[1]) and float(x[2]) > 0.6] if ocr else []   # (newer RapidOCR gives the score as text)
         G[n] = dict(number=num, grade=grade, iou=round(iou, 3), soft_edge=round(semi, 3), parts=parts, cut=[k for k, v in e.items() if v], size=list(rgba.size), ocr=digits)
         json.dump(G, open(gp, 'w')); print(n, num, grade, digits, flush=True)
     for o in [x for x in sys.argv if '=' in x and x.split('=')[0] in G]:

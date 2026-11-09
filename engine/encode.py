@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build, rewrap, copy and verify delivery masters with ffmpeg, using an encode preset from the profile.
 
-    encode.py master  INPUT... -o OUT.mp4 [--preset lightcast] [--b-v 12M --maxrate 14M --bufsize 24M]
+    encode.py master  INPUT... -o OUT.mp4 [--preset web] [--b-v 12M --maxrate 14M --bufsize 24M]
                       [--faststart|--no-faststart] [--full-verify] [--force] [--log FILE]
     encode.py rewrap  IN.ts [-o OUT.mp4]                      stream copy into MP4 (no quality loss)
     encode.py copy-verify FILE... --to DIR|<paths key>        copy (cp -p) then byte-compare (cmp)
@@ -34,7 +34,7 @@ sys.path.insert(0, HERE)
 import vprofile as prof  # noqa: E402
 import offload  # noqa: E402
 
-# An encode preset is the profile's delivery.<preset> (e.g. delivery.lightcast). The profile must give the encoder and
+# An encode preset is the profile's delivery.<preset> (e.g. delivery.web). The profile must give the encoder and
 # the bitrates; these generic settings fill in anything else it leaves out.
 PRESET_REQUIRED = ("vcodec", "b_v", "maxrate", "bufsize")
 PRESET_GENERIC = {"vcodec_fallback": "libx264", "fallback_args": ["-preset", "fast"], "acodec": "copy",
@@ -255,6 +255,11 @@ def want_faststart(a, preset, est_bytes):
 
 
 def do_master(a, ff, fp, log):
+    if not a.preset:
+        try:
+            a.preset = prof.load(a.profile).get("delivery.default_preset", "web")
+        except Exception:
+            a.preset = "web"
     preset = load_preset(a.profile, a.preset)
     for k in ("b_v", "maxrate", "bufsize"):
         if getattr(a, k):
@@ -388,7 +393,7 @@ def main(argv=None):
     ap.add_argument("mode", choices=["master", "rewrap", "copy-verify", "verify"])
     ap.add_argument("inputs", nargs="+", help="concat list / media files (master), .ts (rewrap), files (copy-verify, verify)")
     ap.add_argument("-o", "--out", help="output file (master: required; rewrap: default IN with .mp4)")
-    ap.add_argument("--preset", default="lightcast", help="profile delivery.<preset> (default lightcast)")
+    ap.add_argument("--preset", default=None, help="profile delivery.<preset> (default: the profile's delivery.default_preset, else web)")
     ap.add_argument("--b-v", dest="b_v", help="override video bitrate, e.g. 14M")
     ap.add_argument("--maxrate", help="override maxrate, e.g. 16M")
     ap.add_argument("--bufsize", help="override bufsize, e.g. 28M")

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contact ACME</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../components.css">
+</head>
+<body>
+  <a class="ui-skip" href="#main">Skip to content</a>
+  <header class="ui-container" style="padding-block: var(--space-4)">
+    <nav aria-label="Main"><a href="#main">Contact</a></nav>
+  </header>
+  <main id="main" class="ui-container">
+    <h1>Contact us</h1>
+    <p class="ui-muted">We reply within 2 working days.</p>
+    <form id="contact" class="ui-card" style="max-width: 36rem" novalidate>
+      <div class="ui-field">
+        <label for="name">Name</label>
+        <input class="ui-input" id="name" name="name" autocomplete="name" required aria-describedby="name-err">
+        <p class="ui-error" id="name-err"></p>
+      </div>
+      <div class="ui-field">
+        <label for="email">Email</label>
+        <input class="ui-input" id="email" name="email" type="email" autocomplete="email" required aria-describedby="email-hint email-err">
+        <p class="ui-hint" id="email-hint">Only used to answer this message.</p>
+        <p class="ui-error" id="email-err"></p>
+      </div>
+      <div class="ui-field">
+        <label for="topic">Topic <span class="ui-optional">(optional)</span></label>
+        <select class="ui-select" id="topic" name="topic">
+          <option value="">Choose a topic</option><option>Quote</option><option>Support</option>
+        </select>
+      </div>
+      <div class="ui-field">
+        <label for="message">Message</label>
+        <textarea class="ui-textarea" id="message" name="message" required aria-describedby="message-err"></textarea>
+        <p class="ui-error" id="message-err"></p>
+      </div>
+      <label class="ui-check"><input type="checkbox" name="news"> <span>Email me news and offers (optional, unsubscribe any time)</span></label>
+      <label class="ui-check"><input type="checkbox" name="consent" required aria-describedby="consent-err">
+        <span>I agree that ACME may use these details to answer my message. <a href="#privacy">Privacy policy</a></span></label>
+      <p class="ui-error" id="consent-err"></p>
+      <div class="ui-btn-row" style="margin-top: var(--space-4)">
+        <button class="ui-btn" type="submit">Send message</button>
+        <button class="ui-btn ui-btn--secondary" type="reset">Clear</button>
+      </div>
+    </form>
+  </main>
+  <div class="ui-toasts" role="status" aria-live="polite"></div>
+  <script src="../spring.js"></script>
+  <script src="../ui-motion.js"></script>
+  <script>
+    // native validation, messages next to each field in words, focus moves to the first problem
+    const form = document.getElementById('contact');
+    const say = { name: 'Error: enter your name.', email: 'Error: enter an email address like name@example.com.',
+                  message: 'Error: write a message.', consent: 'Error: tick the box so we may use your details.' };
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      let first = null;
+      for (const [n, text] of Object.entries(say)) {
+        const el = form.elements[n], err = document.getElementById(n + '-err'), bad = !el.checkValidity();
+        el.setAttribute('aria-invalid', String(bad)); err.textContent = bad ? text : '';
+        if (bad && !first) first = el;
+      }
+      if (first) { first.focus(); return; }
+      UIMotion.toast('This example form does not send anywhere.', { title: 'Looks good', tone: 'success' });
+      form.reset();
+    });
+    form.addEventListener('reset', () => form.querySelectorAll('[aria-invalid]').forEach((el) => {
+      el.removeAttribute('aria-invalid'); document.getElementById(el.name + '-err').textContent = ''; }));
+  </script>
+</body>
+</html>

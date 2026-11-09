@@ -25,6 +25,7 @@ CLI:
     python3 engine/vprofile.py new <name> --primary "#123456" --accent "#ABCDEF" [--head-font F --body-font F]
                                   [--logo logo.svg] [--root /path/to/org] [--sample]   # --sample renders a test card
     python3 engine/vprofile.py default acme             # writes local.json (machine-only, not committed)
+    python3 engine/vprofile.py sample acme card.png     # brand check card: logo, colours + contrast, font specimens
 """
 import argparse, json, os, re, sys
 
@@ -247,17 +248,98 @@ def _new(a):
         _sample(load(folder), os.path.join(folder, "sample_card.png"))
 
 
+def _hex(c):
+    c = c.lstrip("#"); return tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _lum(rgb):
+    def ch(v):
+        v /= 255; return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (ch(v) for v in rgb); return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast(a, b):
+    la, lb = sorted((_lum(a), _lum(b)), reverse=True); return (la + 0.05) / (lb + 0.05)
+
+
+def _logo_image(P, max_w, max_h):
+    """The profile's logo as an RGBA PIL image (logo_png, else logo_svg via cairosvg), or None."""
+    from PIL import Image
+    cols = P.get("brand", {})
+    try:
+        if cols.get("logo_png"):
+            im = Image.open(P.asset("brand.logo_png")).convert("RGBA")
+        elif cols.get("logo_svg"):
+            import io, cairosvg
+            im = Image.open(io.BytesIO(cairosvg.svg2png(url=P.asset("brand.logo_svg"), output_width=1200))).convert("RGBA")
+        else:
+            return None
+    except Exception as e:                       # a broken logo should not stop the check card
+        print(f"logo not drawn: {e}"); return None
+    bb = im.getbbox(); im = im.crop(bb) if bb else im
+    k = min(max_w / im.width, max_h / im.height); return im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))))
+
+
 def _sample(P, out):
-    """Render one lower-third style card from the profile so a new profile can be checked by eye."""
+    """Render a brand check card from the profile: name, logo, every colour (with its contrast against the ground),
+    every font role as a specimen, and a lower third built from primary / accent / text. Check it by eye before
+    a profile is used."""
     from PIL import Image, ImageDraw, ImageFont
-    W, H = 1920, 1080
-    im = Image.new("RGB", (W, H), (40, 40, 40)); d = ImageDraw.Draw(im)
-    d.rectangle([90, 760, 1100, 960], fill=P.rgb("primary"))
-    d.rectangle([90, 760, 104, 960], fill=P.rgb("accent"))
-    d.text((140, 780), P.get("display_name", P.name).upper(), font=ImageFont.truetype(P.font("head"), 96),
-           fill=P.rgb("text") if "text" in P.get("brand.colors") else (255, 255, 255))
-    d.text((140, 890), "SAMPLE LOWER THIRD · 0123456789", font=ImageFont.truetype(P.font("body"), 44),
-           fill=P.rgb("accent"))
+    W, H, M = 1920, 1080, int(P.get("layout.safe_px", 90))
+    cols = P.get("brand.colors")
+    ground = P.rgb("primary_deep") if "primary_deep" in cols else (40, 40, 40)
+    text = P.rgb("text") if "text" in cols else (255, 255, 255)
+    dim = P.rgb("text_dim") if "text_dim" in cols else tuple(int(0.7 * a + 0.3 * b) for a, b in zip(text, ground))
+    im = Image.new("RGB", (W, H), ground); d = ImageDraw.Draw(im)
+    F = lambda role, size: ImageFont.truetype(P.font(role), size)
+    grad = P.get("brand.gradient", None)
+    if grad and len(grad) >= 2:                  # the profile's field gradient as a thin band under the header
+        stops = [_hex(c) for c in grad]
+        for x in range(W):
+            t = x / (W - 1) * (len(stops) - 1); i = min(int(t), len(stops) - 2); f = t - i
+            d.line([(x, 0), (x, 10)], fill=tuple(int(stops[i][k] + (stops[i + 1][k] - stops[i][k]) * f) for k in range(3)))
+    d.text((M, M - 20), P.get("display_name", P.name), font=F("head", 84), fill=text)
+    d.text((M, M + 82), f"profile: {P.name}  ·  safe area {M}px  ·  {P.get('delivery.size', '1920x1080')}"
+           f" @ {round(float(P.get('delivery.fps', 29.97)), 3)}", font=F("body", 26), fill=dim)
+    logo = _logo_image(P, 420, 170)
+    if logo is not None:
+        im.paste(logo, (W - M - logo.width, M - 20), logo)
+    else:
+        t = "no logo in this profile yet"; f = F("body", 26)
+        d.text((W - M - d.textlength(t, font=f), M), t, font=f, fill=dim)
+    # colour swatches (duplicates by value shown once, under their first role name)
+    seen, sw = {}, []
+    for role, c in cols.items():
+        h = ("#" + c.lstrip("#")).upper()
+        if h not in seen: seen[h] = role; sw.append((role, h))
+    n = len(sw); gap = 12; bw = min(200, (W - 2 * M - gap * (n - 1)) // max(1, n)); y0 = 250
+    fl = F("body", 19 if bw < 150 else 22)
+    for i, (role, h) in enumerate(sw):
+        x = M + i * (bw + gap); rgb = _hex(h)
+        d.rounded_rectangle([x, y0, x + bw, y0 + 110], radius=8, fill=rgb, outline=dim if _contrast(rgb, ground) < 1.3 else None)
+        d.text((x, y0 + 118), role, font=fl, fill=text)
+        d.text((x, y0 + 144), f"{h}  {_contrast(rgb, ground):.1f}:1", font=fl, fill=dim)
+    # font specimens
+    y = 450
+    for role in P.get("brand.fonts"):
+        try:
+            f = F(role, 46)
+        except OSError:
+            d.text((M, y), f"{role}: cannot load {P.font(role)}", font=F("body", 30), fill=(255, 80, 80)); y += 62; continue
+        fam = " ".join(f.getname()); lab = F("body", 22)
+        d.text((M, y + 14), role, font=lab, fill=dim)
+        d.text((M + 230, y), f"{fam} · The quick brown fox, 0123456789", font=f, fill=text); y += 62
+        if y > 720: break
+    # lower third
+    ly = max(y + 30, 790); ly = min(ly, H - M - 150)
+    d.rectangle([M, ly, M + 1010, ly + 150], fill=P.rgb("primary"))
+    d.rectangle([M, ly, M + 14, ly + 150], fill=P.rgb("accent"))
+    d.text((M + 50, ly + 14), P.get("team.home_name", "") or P.get("display_name", P.name).upper(),
+           font=F("head", 64), fill=text)
+    d.text((M + 50, ly + 96), "SAMPLE LOWER THIRD · 0123456789", font=F("body", 34), fill=P.rgb("accent"))
+    c = _contrast(text, P.rgb("primary"))
+    d.text((M + 1040, ly + 104), f"text on primary {c:.1f}:1" + ("" if c >= 4.5 else "  (below 4.5:1)"),
+           font=F("body", 24), fill=dim)
     im.save(out); print(f"sample card: {out}")
 
 

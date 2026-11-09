@@ -25,10 +25,9 @@ Folders (cull dir, Games dir — the profile's `paths.games` —, crops, library
   - he is at least 35% of the frame height;
   - he is wearing the team uniform: enough of the team colour, with none of the opponents' colours
     (`team.uniform`, e.g. navy, rejecting light blue and gold);
-  - he passed the cull's subject-focus pass;
-  - only the best frame of each burst goes forward.
-- **The cut:** the alpha comes from `isnet-general-use`, which gives crisp edges, gated by `u2net_human_seg` so
-  only the person is kept. The largest person is kept and stray blobs are dropped.
+  - only the best frame of each burst goes forward (ranked by the cull's subject score x his height share).
+- **The cut:** the alpha comes from BiRefNet general (crisp, complete people: helmets, dark jerseys, hands),
+  checked against BiRefNet portrait; phone photos are turned upright from their EXIF orientation. The largest person is kept and stray blobs are dropped.
 - **Grade:**
   - A = full body;
   - B = cut at the bottom of the frame (3/4 length);

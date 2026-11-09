@@ -2,22 +2,40 @@
 <html><head><meta charset="utf-8">
 <style>html,body{margin:0;background:transparent}canvas{display:block}</style>
 <script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script src="spring.js"></script>
 </head><body>
 <script type="module">
 // Logo motion graphics: 3D logo (engine.js) + 2D layer (text, light sweep, panels, sponsor art), rendered
 // deterministically frame by frame with a transparent background. Templates: intro, outro, bug_in/bug_loop/bug_out,
-// stinger, presented. Brand fonts and colours arrive in the setup() config (cfg.fonts: family -> font URL,
+// stinger, presented, slam, lockup and more. Brand fonts and colours arrive in the setup() config (cfg.fonts: family -> font URL,
 // cfg.colors: primary / accent / text), so this page holds no brand values.
+// All motion is spring.js (2026-11-08): no fixed-duration eases. Logo lands bouncy / slam, panels and text snappy,
+// pushes and fades smooth (opacity clamped, never overshoots), drifts gentle. Where a template's beat is longer than the
+// preset's own settle time, timed() keeps the preset's damping and slows its omega so the move settles on the old beat.
 import * as THREE from 'three';
 import { makeRenderer, makeScene, buildLogo } from './engine.js';
 
-let W, H, R, scene, cam, logo, out, ctx, tmp, tctx, cfg, sponsorImg = null, tpl, PRIMARY, ACCENT, TXT;
+let W, H, R, scene, cam, logo, out, ctx, tmp, tctx, cfg, sponsorImg = null, plateImg = null, tpl, PRIMARY, ACCENT, TXT;
+const Spring = window.Spring, P = Spring.PRESETS;
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
-const seg = (t, a, b) => clamp((t - a) / (b - a));
-const eOutCubic = (x) => 1 - Math.pow(1 - x, 3);
-const eInCubic = (x) => x * x * x;
-const eInOut = (x) => x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-const eOutBack = (x) => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const SETTLE1 = {};
+// preset `name` (its zeta) with omega scaled so the move settles (0.5%) in `secs`. launch = start speed in units of
+// omega: 0 = starts at rest; 1 with a zeta-1 preset = starts at full speed and decelerates (a pure exponential approach).
+function timed(name, secs, launch = 0) {
+  const p = P[name], key = name + ':' + launch;
+  if (SETTLE1[key] == null) SETTLE1[key] = Spring.settle({ zeta: p.zeta, omega: 1, v0: launch });
+  const omega = SETTLE1[key] / secs;
+  return { zeta: p.zeta, omega, v0: launch * omega };
+}
+const prog = (t, start, c) => Spring.progress(t, { start, ...c });                 // 0 -> 1 (overshoots if zeta < 1)
+const move = (t, start, from, to, c) => Spring.at(t, { start, from, to, ...c });    // value from -> to
+const fadeIn = (t, start, c) => Spring.clamp01(prog(t, start, c));                  // opacity: never overshoots
+// Exits accelerate: an exponential spring run backwards from `end`, so the exit finishes at full speed exactly at `end`.
+const exitP = (t, end, secs) => t >= end ? 1 : Spring.clamp01(1 - prog(end - t, 0, timed('smooth', secs, 1)));
+// light sweep position: a smooth spring from 0 to just past 1 (glint() draws nothing outside 0..1)
+const sweep = (t, start, secs) => 1.05 * prog(t, start, timed('smooth', secs));
+// first time a spring reaches its target (to land a hit on an exact beat: start it this long before the beat)
+function firstCross(c) { for (let t = 0; t < 2; t += 1e-4) if (prog(t, 0, c) >= 1) return t; return 0; }
 
 // Every font in cfg.fonts is required: if one does not load, setup() throws (motion.py then exits non-zero)
 // instead of the text silently falling back to the browser's default serif.
@@ -41,8 +59,11 @@ window.setup = async function (c) {
   out = document.createElement('canvas'); out.width = W; out.height = H; document.body.appendChild(out); ctx = out.getContext('2d');
   tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; tctx = tmp.getContext('2d');
   if (c.sponsor) { sponsorImg = new Image(); sponsorImg.src = c.sponsor; await sponsorImg.decode(); }
+  if (c.plate) { plateImg = new Image(); plateImg.src = c.plate; await plateImg.decode(); }
   tpl = TEMPLATES[c.template];
-  return { duration: c.dur ?? tpl.dur, cut: tpl.cut ?? null };
+  if (!tpl) throw new Error(`unknown template ${c.template} (have: ${Object.keys(TEMPLATES).join(', ')})`);
+  if (tpl.prep) await tpl.prep(c);
+  return { duration: c.dur ?? tpl.dur, cut: tpl.cut ?? null, hit: tpl.hitAt ? tpl.hitAt() : null };
 };
 
 // visible world size on the z=0 plane
@@ -87,81 +108,1040 @@ window.frameAt = function (t) {
   }
   (f.over || []).forEach((p) => p(ctx));
   (f.texts || []).forEach(drawText);
+  if (cfg.finish) return applyFinish(t);
   return out.toDataURL('image/png');
 };
 
+// ---- F1 cinematic finish (--finish dark): a post pass on any template ------------------------------------------------
+// dark ground (radial), a reflective floor under the content (mirrored at its lowest point, blurred = shallow depth of
+// field, faded out), bloom under the content (a blurred bright copy, so the logo itself stays sharp), film grain and a
+// vignette; optional laptop mockup (the finished frame on a laptop screen with a glass reflection). Settings from the
+// profile's finish.dark block (motion.py merges defaults). The result is opaque.
+let FIN = null;
+function finishCanvases() {
+  if (FIN) return FIN;
+  const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return [c, c.getContext('2d')]; };
+  const [a, ax] = mk(), [b, bx] = mk(), [m, mx] = mk(), [s, sx] = mk(); s.width = 64; s.height = 36;
+  const grains = []; let seed = 99991;
+  const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
+  for (let k = 0; k < 4; k++) { const [g, gx] = mk(); g.width = W / 2; g.height = H / 2; const d = gx.createImageData(g.width, g.height);
+    for (let i = 0; i < d.data.length; i += 4) { const v = 128 + 10 * (rnd() + rnd() + rnd() - 1.5) * 2; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    gx.putImageData(d, 0, 0); grains.push(g); }
+  FIN = { a, ax, b, bx, m, mx, s, sx: s.getContext('2d', { willReadFrequently: true }), grains };
+  return FIN;
+}
+function contentBottom() {                                   // lowest row with content (fraction of H), from a 64x36 copy
+  const F = finishCanvases(); F.sx.clearRect(0, 0, 64, 36); F.sx.drawImage(out, 0, 0, 64, 36);
+  const d = F.sx.getImageData(0, 0, 64, 36).data;
+  for (let y = 35; y >= 0; y--) for (let x = 0; x < 64; x++) if (d[(y * 64 + x) * 4 + 3] > 40) return (y + 1) / 36;
+  return 0.7;
+}
+function applyFinish(t) {
+  const F = finishCanvases(), o = cfg.finish, f = F.ax;
+  f.setTransform(1, 0, 0, 1, 0, 0); f.globalAlpha = 1; f.globalCompositeOperation = 'source-over'; f.filter = 'none';
+  const g = f.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, W * 0.8); g.addColorStop(0, o.bg2); g.addColorStop(1, o.bg);
+  f.fillStyle = g; f.fillRect(0, 0, W, H);
+  if (o.floor > 0) {                                         // reflective floor: mirrored, blurred, fading out
+    const yf = Math.min(0.92, contentBottom() + 0.01) * H, bx = F.bx;
+    bx.setTransform(1, 0, 0, 1, 0, 0); bx.clearRect(0, 0, W, H); bx.save(); bx.translate(0, 2 * yf); bx.scale(1, -1);
+    bx.filter = `blur(${o.dof}px)`; bx.drawImage(out, 0, 0); bx.restore(); bx.filter = 'none';
+    const mg = bx.createLinearGradient(0, yf, 0, yf + 0.28 * H); mg.addColorStop(0, 'rgba(0,0,0,1)'); mg.addColorStop(1, 'rgba(0,0,0,0)');
+    bx.globalCompositeOperation = 'destination-in'; bx.fillStyle = mg; bx.fillRect(0, 0, W, H); bx.globalCompositeOperation = 'source-over';
+    f.save(); f.globalAlpha = o.floor; f.drawImage(F.b, 0, 0); f.restore();
+  }
+  if (o.bloom > 0) { f.save(); f.globalCompositeOperation = 'lighter'; f.filter = `blur(${Math.round(0.018 * H)}px) brightness(1.3)`;
+    f.globalAlpha = o.bloom; f.drawImage(out, 0, 0); f.restore(); f.filter = 'none'; }
+  f.drawImage(out, 0, 0);                                    // the content itself stays sharp
+  if (o.grain > 0) { f.save(); f.globalCompositeOperation = 'overlay'; f.globalAlpha = o.grain; f.imageSmoothingEnabled = false;
+    f.drawImage(F.grains[((Math.round(t * 60) % 4) + 4) % 4], 0, 0, W, H); f.restore(); }
+  if (o.vignette > 0) { const v = f.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.75);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, `rgba(0,0,0,${o.vignette})`); f.fillStyle = v; f.fillRect(0, 0, W, H); }
+  if (o.mockup !== 'laptop') return F.a.toDataURL('image/png');
+  const m = F.mx;                                            // laptop mockup: the frame on a screen, glass reflection
+  m.setTransform(1, 0, 0, 1, 0, 0); m.fillStyle = o.bg; m.fillRect(0, 0, W, H);
+  const sw = 0.62 * W, sh = sw * H / W, sx0 = (W - sw) / 2, sy0 = 0.12 * H, bz = 0.012 * W;
+  const drift = 0.006 * H * Math.sin(t * 0.8);              // the laptop floats a little
+  m.save(); m.translate(0, drift);
+  m.fillStyle = '#1A1C20'; m.beginPath(); m.roundRect(sx0 - bz, sy0 - bz, sw + 2 * bz, sh + 2 * bz, bz); m.fill();
+  m.drawImage(F.a, sx0, sy0, sw, sh);
+  const gl = m.createLinearGradient(sx0, sy0, sx0 + sw * 0.6, sy0 + sh); gl.addColorStop(0, 'rgba(255,255,255,0.10)'); gl.addColorStop(0.5, 'rgba(255,255,255,0)');
+  m.fillStyle = gl; m.fillRect(sx0, sy0, sw, sh);
+  m.fillStyle = '#2A2D33'; m.beginPath(); m.moveTo(sx0 - 0.06 * W, sy0 + sh + bz); m.lineTo(sx0 + sw + 0.06 * W, sy0 + sh + bz);
+  m.lineTo(sx0 + sw + 0.03 * W, sy0 + sh + bz + 0.03 * H); m.lineTo(sx0 - 0.03 * W, sy0 + sh + bz + 0.03 * H); m.closePath(); m.fill();
+  m.restore();
+  return F.m.toDataURL('image/png');
+}
+
+// slam: the hit spring starts this long before the landing beat, so it reaches the landing exactly on the beat
+const SLAM_LAND = 0.42, SLAM_MID = 1.15, SLAM_LEAD = firstCross(P.slam);
+const STINGER_CUT = 0.55;
+const INTRO_LAND = 0.5, INTRO_LEAD = firstCross(P.bouncy), OUTRO_LAND = 0.45;
+
 const TEMPLATES = {
-  // logo slams in from behind the camera with a turn (never shows its back), lands with a small bounce, light sweep, slow drift.
-  // cfg.place = {cx, cy, bw, bh} (frame fractions) sets where it lands; cfg.dur sets the length (holds after landing).
+  // logo slams in from behind the camera with a turn (never shows its back), lands with a bounce at 0.42 s, light sweep,
+  // slow drift. Fly-in: a decelerating smooth spring from 2.8x; the last 15% of the scale is a slam-preset hit that crosses
+  // the landing size on the 0.42 s beat and bounces. cfg.place = {cx, cy, bw, bh} (frame fractions) sets where it lands;
+  // cfg.dur sets the length (holds after landing, drifting gently).
   slam: { dur: 2.0, fn: (t, c) => {
-    const p = c.place || { cx: 0.5, cy: 0.45, bw: 0.6, bh: 0.45 }, L = 0.42;
-    const e = eOutCubic(seg(t, 0, L)), k = t > L ? t - L : 0;
-    const bounce = t > L ? Math.exp(-k * 9) * Math.sin(k * 38) * 0.05 : 0;
+    const p = c.place || { cx: 0.5, cy: 0.45, bw: 0.6, bh: 0.45 }, L = SLAM_LAND;
+    const fly = prog(t, 0, timed('smooth', 0.55, 1)), hit = prog(t, L - SLAM_LEAD, P.slam);
+    const k = t > L ? t - L : 0, drift = prog(t, L, timed('gentle', 1.0));          // drift fades in after the hit
     return {
-      logo: { cx: p.cx, cy: p.cy, bw: p.bw, bh: p.bh, scale: 2.8 - 1.8 * e + bounce,
-              ry: (1 - e) * -1.25 + Math.sin(k * 1.3) * 0.10, rx: (1 - e) * 0.3, rz: (1 - e) * 0.22, op: seg(t, 0, 0.1) },
-      glint: seg(t, 0.55, 1.25),
+      logo: { cx: p.cx, cy: p.cy, bw: p.bw, bh: p.bh, scale: 2.8 + (SLAM_MID - 2.8) * fly + (1 - SLAM_MID) * hit,
+              ry: (1 - fly) * -1.25 + drift * 0.10 * Math.sin(k * 1.3), rx: (1 - fly) * 0.3 + drift * 0.05 * (1 - Math.cos(k * 1.3)),
+              rz: (1 - fly) * 0.22, op: fadeIn(t, 0, timed('smooth', 0.2)) },
+      glint: sweep(t, 0.55, 0.7),
     };
   } },
-  // 4 s: logo pushes in with a turn, settles, light sweep; holds on the last frame
+  // 4 s: logo flies in from the camera with a turn and lands on a hit at 0.5 s (the hook: a big move in the first second),
+  // then pushes in slowly to full size under the light sweep (1.5 s); text at 1.6 s; holds on the last frame
   intro: { dur: 4, fn: (t, c) => {
-    const a = seg(t, 0, 1.4), e = eOutBack(a);
+    const L = INTRO_LAND, fly = prog(t, 0, timed('smooth', 0.65, 1)), hit = prog(t, L - INTRO_LEAD, P.bouncy);
+    const push = prog(t, L, timed('smooth', 1.75));                                 // settles as the end hold starts (2.25 s)
     return {
-      logo: { cx: 0.5, cy: c.text1 ? 0.45 : 0.5, bw: 0.7, bh: 0.55, scale: 0.35 + 0.65 * e, ry: (1 - eOutCubic(a)) * -1.3,
-              rx: (1 - eOutCubic(a)) * 0.25, op: seg(t, 0, 0.35) },
-      glint: seg(t, 1.5, 2.4),
-      texts: c.text1 ? [{ str: c.text1, font: 'Head', size: 72, color: TXT, x: 0.5, y: 0.78 + (1 - eOutCubic(seg(t, 1.6, 2.2))) * 0.03,
-                          op: seg(t, 1.6, 2.2), spacing: 6 }] : [],
+      logo: { cx: 0.5, cy: c.text1 ? 0.45 : 0.5, bw: 0.7, bh: 0.55, scale: 2.6 + (1.0 - 2.6) * fly + (0.9 - 1.0) * hit + 0.1 * push,
+              ry: (1 - fly) * -1.1, rx: (1 - fly) * 0.25, rz: (1 - fly) * 0.15, op: fadeIn(t, 0, timed('smooth', 0.2)) },
+      glint: sweep(t, 1.5, 0.9),
+      texts: c.text1 ? [{ str: c.text1, font: 'Head', size: 72, color: TXT, x: 0.5, y: move(t, 1.6, 0.81, 0.78, timed('snappy', 0.6)),
+                          op: fadeIn(t, 1.6, timed('smooth', 0.6)), spacing: 6 }] : [],
     };
   } },
-  // 6 s end card: logo drops in, two text lines, sweep, everything fades out at the end
+  // 6 s end card: logo falls in from above and from close to the camera (2.2x) and lands with a bounce at 0.45 s (the
+  // hook: a big move in the first half second), two text lines
+  // (snappy), sweep, gentle sway, everything fades out by 6 s
   outro: { dur: 6, fn: (t, c) => {
-    const a = eOutCubic(seg(t, 0, 1.0)), fade = 1 - seg(t, 5.2, 6);
-    const l1 = eOutCubic(seg(t, 0.9, 1.5)), l2 = eOutCubic(seg(t, 1.2, 1.8));
+    const fly = prog(t, 0, timed('smooth', 0.5)), hit = prog(t, OUTRO_LAND - INTRO_LEAD, P.bouncy);   // falls (fastest on screen), bounces in
+    const drop = 0.05 + 0.27 * fly + 0.06 * hit, zoom = 2.2 - 1.2 * fly, a = fadeIn(t, 0, timed('smooth', 0.1)), fade = 1 - exitP(t, 6, 0.8);
+    const l1 = timed('snappy', 0.6), l2 = timed('smooth', 0.6);
     return {
-      logo: { cx: 0.5, cy: 0.38 - (1 - a) * 0.06, bw: 0.58, bh: 0.42, ry: Math.sin(t * 1.1) * 0.12 * a, op: a * fade },
-      glint: seg(t, 2.0, 2.9),
+      logo: { cx: 0.5, cy: drop, bw: 0.58, bh: 0.42, scale: zoom, ry: Math.sin(t * 1.1) * 0.12 * a, rx: (Math.cos(t * 1.1) - 1) * 0.05 * a, op: a * fade },
+      glint: sweep(t, 2.0, 0.9),
       texts: [
-        c.text1 && { str: c.text1, font: 'Head', size: 84, color: TXT, x: 0.5, y: 0.70 + (1 - l1) * 0.03, op: l1 * fade, spacing: 8 },
-        c.text2 && { str: c.text2, font: 'BodySB', size: 44, color: c.accent || ACCENT, x: 0.5, y: 0.79 + (1 - l2) * 0.03, op: l2 * fade, spacing: 2 },
+        c.text1 && { str: c.text1, font: 'Head', size: 84, color: TXT, x: 0.5, y: move(t, 0.9, 0.73, 0.70, l1), op: fadeIn(t, 0.9, l2) * fade, spacing: 8 },
+        c.text2 && { str: c.text2, font: 'BodySB', size: 44, color: c.accent || ACCENT, x: 0.5, y: move(t, 1.2, 0.82, 0.79, l1), op: fadeIn(t, 1.2, l2) * fade, spacing: 2 },
       ].filter(Boolean),
     };
   } },
-  // corner bug in three clips (bottom-right, inside the safe margin)
-  bug_in: { dur: 1.0, fn: (t) => { const a = seg(t, 0, 0.8); return { logo: bugPos(eOutBack(a), (1 - eOutCubic(a)) * 2.4, seg(t, 0, 0.25)), glint: seg(t, 0.55, 1.0) }; } },
-  bug_loop: { dur: 6, fn: (t) => ({ logo: bugPos(1, 0.22 * Math.sin((t / 6) * 2 * Math.PI), 1), glint: seg(t, 3.0, 3.8) }) },
-  bug_out: { dur: 0.8, fn: (t) => { const a = eInCubic(seg(t, 0, 0.7)); return { logo: bugPos(1 - a, a * 1.8, 1 - seg(t, 0.45, 0.8)) }; } },
+  // corner bug in three clips (bottom-right, inside the safe margin). The loop sways the logo on a slow ellipse (ry and rx
+  // a quarter turn apart, so it never stops); bug_in ends and bug_out starts in the loop's start pose, so the cuts are seamless.
+  bug_in: { dur: 1.0, fn: (t) => {
+    const land = prog(t, 0, timed('bouncy', 0.8)), turn = prog(t, 0, timed('smooth', 0.8, 1));
+    return { logo: bugPos(land, (1 - turn) * 1.2 + bugSway(t - 1.0).ry, bugSway(t - 1.0).rx, fadeIn(t, 0, timed('smooth', 0.25))), glint: sweep(t, 0.55, 0.45) };
+  } },
+  bug_loop: { dur: 6, fn: (t) => { const s = bugSway(t); return { logo: bugPos(1, s.ry, s.rx, 1), glint: loopSweep(t) }; } },
+  bug_out: { dur: 0.8, fn: (t, c) => {
+    const L = 0.8 - 1 / (c.fps || 60), a = exitP(t, L, 0.7 - 1 / (c.fps || 60)), s = bugSway(t); // shrink + fade end on the last frame
+    return { logo: bugPos(1 - a, s.ry + a * 1.2, s.rx, 1 - exitP(t, L, 0.35)) };
+  } },
   // 1.2 s transition: primary-colour panel + accent edge wipe across, logo hits centre; frame fully covered at the cut point
-  stinger: { dur: 1.2, cut: 0.55, fn: (t) => {
-    const inP = eInOut(seg(t, 0, 0.5)), outP = eInOut(seg(t, 0.68, 1.2));
+  // (0.55 s). The panel moves on smooth springs (no overshoot: an overshoot would uncover the frame edge around the cut).
+  stinger: { dur: 1.2, cut: STINGER_CUT, fn: (t) => {
+    const inP = prog(t, 0, timed('smooth', 0.5)), outP = exitP(t, 1.2, 0.52);
     const x0 = (1 - inP) * 1.15 * W - outP * 1.15 * W;              // panel left edge
     const panel = (cx) => { cx.save(); cx.fillStyle = PRIMARY; cx.beginPath(); cx.moveTo(x0, 0); cx.lineTo(x0 + 1.15 * W, 0);
       cx.lineTo(x0 + 1.15 * W - 0.15 * W, H); cx.lineTo(x0 - 0.15 * W, H); cx.closePath(); cx.fill();
       cx.fillStyle = ACCENT; const e = 0.025 * W;                         // accent leading and trailing edges
       [[x0 - e, x0], [x0 + 1.15 * W, x0 + 1.15 * W + e]].forEach(([a, b]) => { cx.beginPath(); cx.moveTo(a, 0); cx.lineTo(b, 0); cx.lineTo(b - 0.15 * W, H); cx.lineTo(a - 0.15 * W, H); cx.closePath(); cx.fill(); });
       cx.restore(); };
-    const lp = seg(t, 0.2, 0.62), lo = seg(t, 0.7, 1.0);
-    return { under: [panel], logo: { cx: 0.5 + outP * -0.9, cy: 0.5, bw: 0.55, bh: 0.45, scale: 0.4 + 0.6 * eOutBack(lp) + lo * 0.25,
-             ry: (1 - eOutCubic(lp)) * 1.6, op: seg(t, 0.2, 0.3) * (1 - lo) }, glint: seg(t, 0.45, 0.75) };
+    const hit = move(t, 0.2, 0.4, 1, P.bouncy), turn = prog(t, 0.2, timed('smooth', 0.42, 1)), lo = exitP(t, 1.0, 0.3);
+    return { under: [panel], logo: { cx: 0.5 + outP * -0.9, cy: 0.5, bw: 0.55, bh: 0.45, scale: hit + lo * 0.25,
+             ry: (1 - turn) * 1.2, op: fadeIn(t, 0.2, timed('smooth', 0.1)) * (1 - lo) }, glint: sweep(t, 0.45, 0.3) };
   } },
-  // 5 s lower third: primary-colour bar wipes on, our logo pops, PRESENTED BY + sponsor logo; wipes off
+  // 5 s lower third: primary-colour bar wipes on (snappy), our logo lands (bouncy), PRESENTED BY + sponsor logo, logo sways
+  // gently while it holds; everything wipes off by 4.9 s
   presented: { dur: 5, fn: (t, c) => {
-    const inP = eOutCubic(seg(t, 0, 0.6)), outP = eInCubic(seg(t, 4.3, 4.9));
+    const inP = prog(t, 0, timed('snappy', 0.6)), outP = exitP(t, 5 - 1 / (c.fps || 60), 0.7 - 1 / (c.fps || 60));   // wipe-off ends on the last frame
     const bx = 0.05, by = 0.76, bw = 0.52, bh = 0.15, vis = inP * (1 - outP);
     const bar = (cx) => { if (vis <= 0) return; cx.save(); cx.fillStyle = PRIMARY; cx.globalAlpha = 0.94;
       cx.fillRect(bx * W, by * H, bw * W * vis, bh * H); cx.globalAlpha = 1; cx.fillStyle = ACCENT; cx.fillRect(bx * W, (by + bh) * H - 6, bw * W * vis, 6); cx.restore(); };
-    const sp = (cx) => { if (!sponsorImg) return; const o = seg(t, 0.9, 1.4) * (1 - seg(t, 4.1, 4.4)); if (o <= 0) return;
+    const sp = (cx) => { if (!sponsorImg) return; const o = fadeIn(t, 0.9, timed('smooth', 0.5)) * (1 - exitP(t, 4.4, 0.3)); if (o <= 0.001) return;
       const boxW = 0.2 * W, boxH = 0.1 * H, s = Math.min(boxW / sponsorImg.width, boxH / sponsorImg.height);
       const w = sponsorImg.width * s, h = sponsorImg.height * s; cx.save(); cx.globalAlpha = o;
       cx.drawImage(sponsorImg, (bx + bw - 0.015) * W - w, (by + bh / 2) * H - h / 2, w, h); cx.restore(); };
-    const lo = eOutBack(seg(t, 0.35, 0.95)) * (1 - seg(t, 4.0, 4.35));
+    const lo = prog(t, 0.35, timed('bouncy', 0.6)) * (1 - exitP(t, 4.35, 0.35)), turn = prog(t, 0.35, timed('smooth', 0.6, 1));
+    const sway = prog(t, 0.95, timed('gentle', 0.8)), k = Math.max(0, t - 0.95);    // keeps the hold alive
     return { under: [bar], over: [sp],
-      logo: { cx: bx + 0.085, cy: by + bh / 2, bw: 0.13, bh: bh * 0.78, scale: Math.max(lo, 0.001), ry: (1 - seg(t, 0.35, 0.95)) * 1.2, op: lo > 0.01 ? 1 : 0 },
-      glint: seg(t, 1.2, 1.9),
+      logo: { cx: bx + 0.085, cy: by + bh / 2, bw: 0.13, bh: bh * 0.78, scale: Math.max(lo, 0.001),
+              ry: (1 - turn) * 1.2 + sway * 0.30 * Math.sin(k * 2.4), rx: sway * 0.15 * (1 - Math.cos(k * 2.4)), op: lo > 0.01 ? 1 : 0 },
+      glint: t < 2.6 ? sweep(t, 1.2, 0.7) : sweep(t, 2.9, 0.7),            // second sweep keeps the hold alive
       texts: [{ str: c.text1 || 'PRESENTED BY', font: 'Body', size: 40, color: TXT, x: bx + 0.19, y: by + bh / 2, align: 'left',
-                op: seg(t, 0.7, 1.1) * (1 - seg(t, 4.1, 4.4)), spacing: 3, shadow: false }] };
+                op: fadeIn(t, 0.7, timed('smooth', 0.4)) * (1 - exitP(t, 4.4, 0.3)), spacing: 3, shadow: false }] };
   } },
+  // 4.17 s full-frame lockup, rebuilt by measurement (engine/measure.py) from a reference show-open's closing title
+  // sign: the camera tilts down and pulls back onto a lit sign and settles; three lines
+  // flicker on (dim / full) and blink once more at ~2.4 s; the set's lights fade up and blink. Springs, steps and blinks are measured
+  // (LOCKUP below). text1 small top line, text2 outlined headline (accent), text3 spaced subline. --plate = background
+  // still the camera moves over (e.g. a set photo with its text painted out); without it a
+  // sign is drawn. Motion blur: 6 sub-frame samples over a 180-degree shutter while the camera moves fast; film grain.
+  lockup: { dur: 125 / 29.97, fn: (t, c) => ({ under: [(cx) => drawLockup(cx, t, c)] }) },
+  // L1 signature write-on (2D, any SVG): one pen traces every shape's outline in document order (pen lifts between
+  // shapes and subpaths), with a glowing tip and sparks in the accent colour. When the pen finishes (the hit, ~1.9 s at
+  // the default length) the logo's own fills snap in with a spring pop, an accent bloom flash and a spark burst; two
+  // light sweeps and a slow push keep the hold alive. Pen speed is a smooth spring launched at half speed (moves from
+  // frame 1) over --write seconds (default 48% of the length, at most 2.2 s). text1 = optional line under the logo.
+  writeon: { dur: 4.5, prep: (c) => prepWriteon(c), hitAt: () => WR.hit, fn: (t, c) => {
+    const w = WR, d = c.dur ?? 4.5;
+    return { under: [(cx) => drawWriteon(cx, t, d)],
+      texts: c.text1 ? [{ str: c.text1, font: 'Head', size: 72, color: TXT, x: 0.5, y: move(t, w.hit + 0.3, w.textY + 0.03, w.textY, timed('snappy', 0.6)),
+                          op: fadeIn(t, w.hit + 0.3, timed('smooth', 0.6)), spacing: 6 }] : [] };
+  } },
+  // L3 morph (2D, any SVG): one circle per outline of the logo (letters, counters, parts) floats in from a scattered
+  // spot, drifts onto its part, and its outline springs from a circle into the real shape point by point (counters are
+  // drawn with the opposite winding, so they open as holes). The real fills land as a hit (pop, bloom, sweeps), then a
+  // slow push. 3.6 s (the last ~1.7 s is the logo resting: qa --holds end:1.6); text1 = optional line under the logo.
+  morph: { dur: 3.6, prep: async (c) => { await prepWriteon(c); prepMorph(); }, hitAt: () => MO.hit, fn: (t, c) => ({
+    under: [(cx) => drawMorph(cx, t, c.dur ?? 3.6)], texts: underLine(t, c, MO.hit) }) },
+  // L9 pixelbuild (2D, any SVG): the logo sampled onto a dot grid; every dot springs out from the centre to its place
+  // (staggered by distance, snappy), glows as it lands (additive bloom sprites), then the clean mark and wordmark
+  // resolve over the dots (the dots fade back). 3.4 s (rests ~1.6 s after the hit: qa --holds end:1.6).
+  pixelbuild: { dur: 3.4, prep: async (c) => { await prepWriteon(c); prepPixel(); }, hitAt: () => PX.hit, fn: (t, c) => ({
+    under: [(cx) => drawPixel(cx, t, c.dur ?? 3.4)], texts: underLine(t, c, PX.hit) }) },
+  // L2 linebuild (2D, any SVG): outline pieces race in from off-frame along their direction from the centre and lock
+  // onto the logo (L1's lines, converging); the fills land as a hit; then three mockups: a construction grid draws on,
+  // the mark becomes the avatar of a profile page (text1 = the name), and it ends pressed into fabric (displacement +
+  // emboss + weave, light sweep). 7.5 s.
+  linebuild: { dur: 7.5, prep: async (c) => { await prepWriteon(c); prepLines(c); }, hitAt: () => LB.hit, fn: (t, c) => ({
+    under: [(cx) => drawLinebuild(cx, t, c)] }) },
+  // L4 echo (2D outline stinger, any SVG): the outline appears at the centre and echoes ripple out, each copy a beat
+  // later, growing and fading; a panel in the primary colour swells from the mark after them and covers the frame at the
+  // cut (0.55 s, printed); then it shrinks back into the mark while echoes fall back in, and the frame clears (1.2 s).
+  echo: { dur: 1.2, cut: 0.55, prep: async (c) => { await prepWriteon(c); }, fn: (t) => ({ under: [(cx) => drawEcho(cx, t)] }) },
+  // L10 lightstreak (any SVG): a point of light with a long trail writes the outline (additive, bloom), light streaks
+  // race across the frame like timeline tracks, then the fills land as a hit. 3.5 s (rests ~1.6 s: qa --holds end:1.6).
+  lightstreak: { dur: 3.5, prep: async (c) => { await prepWriteon(c); WR.hit = 0.88 * WR.secs; }, hitAt: () => WR.hit, fn: (t, c) => ({
+    under: [(cx) => drawStreak(cx, t, c.dur ?? 3.5)], texts: underLine(t, c, WR.hit) }) },
+  // S1 lightpaint: one light draws a story, scene by scene: the SVG's top-level groups (<g>) are the scenes, laid side
+  // by side; the camera follows the light (smooth springs) while the trails hang in the air; use with --finish dark for
+  // haze, bloom and the wet floor. Length = 2.4 s per scene + 0.8 s; the light ignites as a hit at 0.08 s. The story art is any line art (drawn, traced or generated; never a fake of a real person).
+  lightpaint: { dur: 7, prep: async (c) => { await prepPaint(c); }, hitAt: () => 0.08, fn: (t) => ({ under: [(cx) => drawPaint(cx, t)] }) },
+  // L5 swap (kinetic word swaps): text1 holds the line, with "___" marking the slot (else the slot follows it); text2 =
+  // the words that take the slot in turn ("better|bolder|evolved"). Each word's letters rise into the slot through a mask
+  // one after another (snappy), the old word leaves upward (uiExit), the slot springs to the new word's width, and the
+  // last word lands in the accent colour with an underline. 0.9 s a word.
+  swap: { dur: 4, prep: async (c) => { prepSwap(c); tpl.dur = SW.dur; }, hitAt: () => SW.hit, fn: (t) => ({ under: [(cx) => drawSwap(cx, t)] }) },
+  // L7 shatter (morph): the logo breaks into shards that fly out on a kick, turn over at their farthest point as pieces
+  // of the NEW mark (--svg2, else --text2 set in the head font), and spring back together; glow on the re-form (the hit).
+  shatter: { dur: 3.2, prep: async (c) => { await prepWriteon(c); await prepShatter(c); }, hitAt: () => SH.hit, fn: (t) => ({ under: [(cx) => drawShatter(cx, t)] }) },
+  // L8 brandgrid: a brand-system grid: the logo panel, colour swatches with their hex, a type specimen, and a stat that
+  // counts up (text1 = the stat's label, text2 = its value, e.g. "1,284"); panels spring in one after another.
+  // The hit is the last panel touching down (its start + the snappy spring's first crossing, about 0.76 s).
+  brandgrid: { dur: 5, prep: async (c) => { await prepWriteon(c); }, hitAt: () => BG_ST(BG_CELLS - 1) + firstCross(P.snappy), fn: (t, c) => ({ under: [(cx) => drawBrandGrid(cx, t, c)] }) },
 };
-function bugPos(scale, ry, op) { return { cx: 0.87, cy: 0.855, bw: 0.17, bh: 0.13, scale: Math.max(scale, 0.001), ry, op }; }
+
+
+// ---- L5 swap --------------------------------------------------------------------------------------------------------
+let SW = null;
+function prepSwap(c) {
+  const words = String(c.text2 || 'next').split('|').map((w) => w.trim()).filter(Boolean);
+  let line = String(c.text1 || '___');
+  if (!line.includes('___')) line = line + ' ___';
+  // the drawn gap (0.22 em) is the only word space next to the slot: trim the spaces the line carries around "___"
+  let [pre, post] = line.split('___'); pre = pre.replace(/\s+$/, ''); post = post.replace(/^\s+/, '');
+  const meas = document.createElement('canvas').getContext('2d');
+  let size = 0.12 * H; const f = (px) => `${px}px Head`;
+  const widthAt = (px) => { meas.font = f(px); return meas.measureText(pre + post).width + (pre ? 0.22 * px : 0) + (post ? 0.22 * px : 0) + Math.max(...words.map((w) => meas.measureText(w).width)); };
+  while (widthAt(size) > 0.86 * W && size > 20) size *= 0.95;
+  meas.font = f(size);
+  const per = 0.9, t0 = 0.25;
+  SW = { pre, post, words, size, font: f(size), widths: words.map((w) => meas.measureText(w).width), pw: meas.measureText(pre).width,
+         qw: meas.measureText(post).width, per, t0, dur: t0 + per * words.length + 1.3, hit: t0 + per * (words.length - 1) + 0.25 };
+  SW.letters = words.map((w) => [...w].map((ch, i) => meas.measureText(w.slice(0, i)).width));
+}
+function drawSwap(cx, t) {
+  const S = SW, n = S.words.length, y = 0.5 * H, base = y + S.size * 0.35;
+  // slot width: springs from word to word
+  let sw = S.widths[0] * clamp(prog(t, S.t0, P.snappy), 0, 2);
+  for (let i = 1; i < n; i++) sw += (S.widths[i] - S.widths[i - 1]) * prog(t, S.t0 + S.per * i, P.snappy);
+  const gap = S.size * 0.22, total = S.pw + (S.pre ? gap : 0) + sw + (S.post ? gap : 0) + S.qw, x0 = (W - total) / 2;
+  const sx = x0 + S.pw + (S.pre ? gap : 0);
+  const lineA = fadeIn(t, 0.0, timed('smooth', 0.4)), drift = 0.012 * W * (1 - prog(t, 0, timed('smooth', S.dur * 1.5, 1)));
+  cx.save(); cx.translate(-drift, 0); cx.font = S.font; cx.textBaseline = 'alphabetic'; cx.fillStyle = TXT;
+  cx.globalAlpha = lineA; cx.fillText(S.pre, x0, base); cx.fillText(S.post, sx + sw + (S.post ? gap : 0), base);
+  // the slot: a mask the size of the line; each word's letters rise in, the previous word leaves upward
+  cx.save(); cx.beginPath(); // bottom edge at base + 0.32 em: below the deepest descenders (Fraunces g -0.245, Cinzel Q -0.278 em), still above an
+  // entering letter's ascender (it starts 1.1 em under the baseline)
+  cx.rect(sx - 4, y - S.size * 0.95, Math.max(1, sw) + 8, S.size * 1.62); cx.clip();
+  for (let i = 0; i < n; i++) {
+    const ti = S.t0 + S.per * i, to = i < n - 1 ? S.t0 + S.per * (i + 1) - 0.05 : Infinity;
+    if (t < ti) break;
+    const last = i === n - 1, col = last ? ACCENT : TXT;
+    [...S.words[i]].forEach((ch, k) => {
+      const tk = ti + 0.035 * k, dy = (1 - prog(t, tk, P.snappy)) * S.size * 1.1 - (t >= to ? fadeIn(t, to + 0.02 * k, timed('uiExit', 0.3)) * S.size * 1.2 : 0);
+      if (t < tk) return;
+      cx.globalAlpha = lineA * fadeIn(t, tk, timed('smooth', 0.25)) * (t >= to ? 1 - fadeIn(t, to + 0.02 * k, timed('uiExit', 0.3)) : 1);
+      cx.fillStyle = col; cx.fillText(ch, sx + S.letters[i][k], base + dy);
+    });
+  }
+  cx.restore();
+  // the last word's underline sweeps in
+  const tl = S.t0 + S.per * (n - 1) + 0.25, u = Spring.clamp01(prog(t, tl, timed('smooth', 0.5)));
+  if (u > 0) { cx.globalAlpha = 1; cx.fillStyle = ACCENT; cx.fillRect(sx, base + S.size * 0.14, sw * u, Math.max(3, S.size * 0.06)); }
+  cx.restore();
+}
+
+// ---- L7 shatter ------------------------------------------------------------------------------------------------------
+let SH = null;
+// --svg2 as an image cropped to its artwork's bounding box (as prepWriteon crops mark A), rasterised at fitW x fitH.
+// Parsed as HTML, so a file without xmlns works too (the serializer writes the namespace back).
+async function svg2Image(src, fitW, fitH) {
+  const ns = 'http://www.w3.org/2000/svg', host = document.createElement('div');
+  host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden'; host.innerHTML = src; document.body.appendChild(host);
+  try {
+    const svg = host.querySelector('svg'); if (!svg) throw new Error('shatter: --svg2 has no <svg> element');
+    const g = document.createElementNS(ns, 'g'); while (svg.firstChild) g.appendChild(svg.firstChild); svg.appendChild(g);
+    const bb = g.getBBox(); if (!(bb.width > 0 && bb.height > 0)) throw new Error('shatter: --svg2 has no visible shapes');
+    const k = Math.min(fitW / bb.width, fitH / bb.height), w = bb.width * k, h = bb.height * k;
+    svg.setAttribute('viewBox', `${bb.x} ${bb.y} ${bb.width} ${bb.height}`); svg.setAttribute('width', w); svg.setAttribute('height', h);
+    svg.setAttribute('preserveAspectRatio', 'none'); svg.removeAttribute('style');
+    const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+    try { await img.decode(); } catch (e) { throw new Error(`shatter: --svg2 could not be decoded as an SVG image (${e && e.message || e})`); }
+    return { img, w, h };
+  } finally { host.remove(); }
+}
+async function prepShatter(c) {
+  const box = { x: WR.ox, y: WR.oy, w: WR.w, h: WR.h };
+  const A = document.createElement('canvas'); A.width = W; A.height = H; A.getContext('2d').drawImage(WR.img, box.x, box.y, box.w, box.h);
+  const B = document.createElement('canvas'); B.width = W; B.height = H; const bx = B.getContext('2d');
+  if (c.svg2) {
+    const { img, w, h } = await svg2Image(c.svg2, box.w, box.h);   // artwork fills the same box as A, centred on it
+    bx.drawImage(img, WR.cx - w / 2, WR.cy - h / 2, w, h);
+  } else {
+    const str = c.text2 || cfg.display || 'NEW'; let px = box.h * 0.6; bx.font = `${px}px Head`;
+    while (bx.measureText(str).width > box.w * 1.05 && px > 10) { px *= 0.94; bx.font = `${px}px Head`; }
+    bx.fillStyle = TXT; bx.textAlign = 'center'; bx.textBaseline = 'middle'; bx.fillText(str, WR.cx, WR.cy);
+  }
+  // shards: a jittered grid over the mark's box, two triangles a cell; keep the ones that cover either mark
+  const cols = 16, rows = Math.max(6, Math.round(16 * box.h / box.w)), pad = 0.06;
+  const X0 = box.x - pad * box.w, Y0 = box.y - pad * box.h, CW = box.w * (1 + 2 * pad) / cols, CH = box.h * (1 + 2 * pad) / rows;
+  const pt = (i, j) => [X0 + i * CW + (i > 0 && i < cols ? (h01(i * 97 + j) - 0.5) * CW * 0.7 : 0), Y0 + j * CH + (j > 0 && j < rows ? (h01(i * 31 + j * 7 + 5) - 0.5) * CH * 0.7 : 0)];
+  const ad = A.getContext('2d').getImageData(0, 0, W, H).data, bd = bx.getImageData(0, 0, W, H).data;
+  // coverage tests every pixel of the triangle (plus a 0.75 px rim, so edge pixels count): a hairline or a small mark
+  // that misses any fixed sample points still keeps its shard (a kept shard with nothing in it just draws nothing)
+  const cover = (tri) => {
+    const [[x0, y0], [x1, y1], [x2, y2]] = tri;
+    const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2) - 1)), maxX = Math.min(W - 1, Math.ceil(Math.max(x0, x1, x2) + 1));
+    const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2) - 1)), maxY = Math.min(H - 1, Math.ceil(Math.max(y0, y1, y2) + 1));
+    const sg = Math.sign((x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)) || 1;
+    const E = [[x0, y0, x1, y1], [x1, y1, x2, y2], [x2, y2, x0, y0]].map(([ax, ay, bx2, by]) => [ax, ay, bx2 - ax, by - ay, 0.75 * Math.hypot(bx2 - ax, by - ay)]);
+    for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
+      const px = x + 0.5, py = y + 0.5; let inside = true;
+      for (const [ax, ay, ex, ey, tol] of E) if (sg * (ex * (py - ay) - ey * (px - ax)) < -tol) { inside = false; break; }
+      if (!inside) continue;
+      const i = (y * W + x) * 4 + 3; if (ad[i] > 8 || bd[i] > 8) return true;
+    }
+    return false;
+  };
+  const tris = [];
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    const a = pt(i, j), b = pt(i + 1, j), cc = pt(i + 1, j + 1), d = pt(i, j + 1);
+    for (const tri of [[a, b, cc], [a, cc, d]]) if (cover(tri)) {
+      const m = [(tri[0][0] + tri[1][0] + tri[2][0]) / 3, (tri[0][1] + tri[1][1] + tri[2][1]) / 3], k = tris.length;
+      const dx = m[0] - WR.cx, dy = m[1] - WR.cy, r = Math.hypot(dx, dy) || 1, far = (0.18 + 0.22 * h01(k * 13)) * Math.max(W, H);
+      const out = [dx / r * far * (0.6 + 0.4 * h01(k)), dy / r * far * (0.6 + 0.4 * h01(k + 3)) - 0.05 * H * h01(k + 9)], spin = (h01(k * 7) - 0.5) * 5;
+      const rad = Math.max(...tri.map((p) => Math.hypot(p[0] - m[0], p[1] - m[1])));
+      // reach: how far (px) the shard's farthest point is displaced per unit of k; under 0.3 px it counts as in place
+      tris.push({ tri, m, out, spin, delay: 0.08 * r / Math.max(W, H) * 3, reach: Math.hypot(out[0], out[1]) + Math.abs(spin) * rad });
+    }
+  }
+  // the hit: the last shard back home (its return starts at back + delay/2; a snappy spring first lands firstCross later)
+  const back = 1.25, lastRet = Math.max(0, ...tris.map((s) => s.delay)) * 0.5;
+  SH = { A, B, tris, t0: 0.55, back, turn: (0.55 + back) / 2 + 0.25, hit: back + lastRet + firstCross(P.snappy) };
+}
+function drawShatter(cx, t) {
+  const S = SH, push = 1 + 0.03 * prog(t, 0, timed('smooth', 3.2, 0.6));
+  const img = t < S.turn ? S.A : S.B;                          // the pieces turn over at their farthest: old -> new
+  // k per shard: 0 = in place, 1 = farthest out. go is left to settle on its own (it overshoots a little past 1 and comes
+  // back, continuous through S.back); the return starts per shard at back + delay/2.
+  const ks = S.tris.map((s) => Math.max(0, prog(t, S.t0 + s.delay, timed('smooth', 0.7, 2.2))) * (1 - prog(t, S.back + s.delay * 0.5, P.snappy)));
+  const rest = ks.map((k, i) => Math.abs(k) * S.tris[i].reach < 0.3);
+  if (rest.every(Boolean)) { around(cx, push, () => cx.drawImage(img, 0, 0)); bloomAt(cx, t, S.hit); return; }   // at rest: the mark itself
+  around(cx, push, () => {
+    // shards in place are drawn as ONE clip path (their union), so no anti-aliased seams show between them
+    if (rest.some(Boolean)) {
+      cx.save(); cx.beginPath();
+      S.tris.forEach((s, i) => { if (rest[i]) { cx.moveTo(...s.tri[0]); cx.lineTo(...s.tri[1]); cx.lineTo(...s.tri[2]); cx.closePath(); } });
+      cx.clip('nonzero'); cx.drawImage(img, 0, 0); cx.restore();
+    }
+    S.tris.forEach((s, i) => {
+      if (rest[i]) return;
+      const k = ks[i], ka = Spring.clamp01(k);                    // ka drives opacity: never past its 0.65 / 0.35 rest values
+      const ang = s.spin * k, ox = s.out[0] * k, oy = s.out[1] * k;
+      cx.save(); cx.translate(s.m[0] + ox, s.m[1] + oy); cx.rotate(ang); cx.translate(-s.m[0], -s.m[1]);
+      cx.beginPath(); cx.moveTo(...s.tri[0]); cx.lineTo(...s.tri[1]); cx.lineTo(...s.tri[2]); cx.closePath(); cx.clip();
+      cx.globalAlpha = 1 - 0.35 * ka; cx.drawImage(img, 0, 0);
+      if (ka > 0.02) { cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 0.35 * ka; cx.fillStyle = ACCENT; cx.fill(); }
+      cx.restore();
+    });
+  });
+  bloomAt(cx, t, S.hit);
+}
+
+// ---- L8 brandgrid ----------------------------------------------------------------------------------------------------
+const BG_ST = (i) => 0.12 * i, BG_CELLS = 5;                 // panel i springs in (snappy) at BG_ST(i): the first from frame 0
+let BG_FIT = null;                                              // the stat's widest count string (see drawBrandGrid)
+// sets cx.font to `fam` at the largest size <= px (shrinking 6% a step) at which `str` fits in maxW
+function fitFont(cx, str, fam, px, maxW) {
+  cx.font = `${px}px ${fam}`;
+  while (cx.measureText(str).width > maxW && px > 8) { px *= 0.94; cx.font = `${px}px ${fam}`; }
+  return px;
+}
+function drawBrandGrid(cx, t, c) {
+  const m = 0.06 * Math.min(W, H), gw = W - 2 * m, gh = H - 2 * m, g = 0.018 * Math.min(W, H);
+  const colW = (gw - 2 * g) / 3, rowH = (gh - g) / 2, r = 0.02 * Math.min(W, H);
+  const cells = [                                               // [col, row, colspan, kind]
+    [0, 0, 2, 'logo'], [2, 0, 1, 'stat'], [0, 1, 1, 'primary'], [1, 1, 1, 'accent'], [2, 1, 1, 'type']];
+  const push = 1 + 0.025 * prog(t, 0, timed('smooth', 5, 0.8));
+  cx.save(); cx.translate(W / 2, H / 2); cx.scale(push, push); cx.translate(-W / 2, -H / 2);
+  cells.forEach(([ci, ri, span, kind], i) => {
+    const st = BG_ST(i), p = prog(t, st, P.snappy), a = fadeIn(t, st, timed('smooth', 0.35));
+    if (t < st) return;
+    const x = m + ci * (colW + g), y = m + ri * (rowH + g), w = colW * span + g * (span - 1), h = rowH;
+    const k = 0.92 + 0.08 * p;                                 // from 92% (never from zero)
+    cx.save(); cx.globalAlpha = a; cx.translate(x + w / 2, y + h / 2 + (1 - p) * 0.03 * H); cx.scale(k, k); cx.translate(-(x + w / 2), -(y + h / 2));
+    const fill = kind === 'accent' ? ACCENT : kind === 'type' || kind === 'stat' ? TXT : PRIMARY;
+    cx.fillStyle = fill; cx.beginPath(); cx.roundRect(x, y, w, h, r); cx.fill();
+    const ink = (hex) => {                                    // '#RGB' / '#RGBA' expand to 6 digits before the luminance test
+      let hx = String(hex).replace(/^#/, ''); if (hx.length === 3 || hx.length === 4) hx = hx.slice(0, 3).replace(/./g, (ch) => ch + ch);
+      const n = parseInt(hx.slice(0, 6), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) > 150 ? '#111111' : '#ffffff'; };
+    cx.fillStyle = ink(fill); cx.textBaseline = 'alphabetic';
+    if (kind === 'logo') { const s = Math.min(w * 0.7 / WR.w, h * 0.7 / WR.h); cx.drawImage(WR.img, x + w / 2 - WR.w * s / 2, y + h / 2 - WR.h * s / 2, WR.w * s, WR.h * s); }
+    else if (kind === 'primary' || kind === 'accent') {
+      const hex = (kind === 'accent' ? ACCENT : PRIMARY).toUpperCase();
+      cx.font = `${0.11 * h}px BodySB`; cx.fillText(kind === 'accent' ? 'ACCENT' : 'PRIMARY', x + 0.08 * w, y + 0.2 * h);
+      cx.font = `${0.16 * h}px Head`; cx.fillText(hex, x + 0.08 * w, y + 0.88 * h);
+    } else if (kind === 'type') {
+      cx.font = `${0.46 * h}px Head`; cx.fillText('Aa', x + 0.08 * w, y + 0.62 * h);
+      fitFont(cx, (cfg.fontNames && cfg.fontNames.Head) || 'HEAD', 'BodySB', 0.085 * h, w * 0.84); cx.fillText((cfg.fontNames && cfg.fontNames.Head) || 'HEAD', x + 0.08 * w, y + 0.86 * h);
+    } else if (kind === 'stat') {
+      // only the first number in text2 counts up; the text around it stays as written ("Est. 1998", "4.9/5", "24/7",
+      // "50-60%", "$1,200"), with thousands separators only if the number was written with them
+      const raw = String(c.text2 || '100'), mt = raw.match(/\d[\d,]*(?:\.\d+)?/);
+      const cnt = Spring.clamp01(prog(t, st + 0.2, timed('smooth', 1.2)));
+      let str = raw, fin = raw;
+      if (mt) {
+        const tok = mt[0].replace(/,+$/, ''), pre = raw.slice(0, mt.index), post = raw.slice(mt.index + tok.length);
+        const v = parseFloat(tok.replace(/,/g, '')) || 0, dec = (tok.split('.')[1] || '').length;
+        const fmt = (x) => x.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: tok.includes(',') });
+        str = pre + fmt(v * cnt) + post;
+        // one size for the whole count: fitted to the widest string the count passes through (2000 steps from 0 to the
+        // value, computed once per value and panel size), not to this frame's string, so the number never jumps in size
+        const key = raw + '|' + h;
+        if (!BG_FIT || BG_FIT.key !== key) {
+          cx.font = `${0.32 * h}px Head`; let ww = -1, widest = '';
+          for (let q = 0; q <= 2000; q++) { const s = pre + fmt(v * q / 2000) + post, sw = cx.measureText(s).width; if (sw > ww) { ww = sw; widest = s; } }
+          BG_FIT = { key, widest };
+        }
+        fin = BG_FIT.widest;
+      }
+      fitFont(cx, fin, 'Head', 0.32 * h, w * 0.86);
+      cx.fillStyle = ACCENT === fill ? ink(fill) : (ink(fill) === '#111111' ? PRIMARY : ACCENT); cx.fillText(str, x + 0.08 * w, y + 0.62 * h);
+      const lab = String(c.text1 || 'THIS YEAR').toUpperCase();
+      cx.fillStyle = ink(fill); fitFont(cx, lab, 'BodySB', 0.085 * h, w * 0.84); cx.fillText(lab, x + 0.08 * w, y + 0.86 * h);
+    }
+    cx.restore();
+  });
+  cx.restore();
+}
+
+// ---- L1 writeon ---------------------------------------------------------------------------------------------------
+// prep: the SVG goes into a hidden DOM node so the browser measures every shape (getTotalLength / getPointAtLength, any
+// shape type, any transform). Each outline is sampled about every 1.2 output px and flattened into one pen track with a
+// cumulative length (jumps between subpaths and shapes are pen lifts and add no length). The fill is the original SVG
+// as an image, cropped to the artwork's bounding box.
+let WR = null;
+async function prepWriteon(c) {
+  const ns = 'http://www.w3.org/2000/svg', host = document.createElement('div');
+  host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden'; host.innerHTML = c.svg; document.body.appendChild(host);
+  const svg = host.querySelector('svg'); if (!svg) throw new Error('writeon: no <svg> element in the logo file');
+  const g = document.createElementNS(ns, 'g'); while (svg.firstChild) g.appendChild(svg.firstChild); svg.appendChild(g);
+  const bb = g.getBBox(); if (!(bb.width > 0 && bb.height > 0)) throw new Error('writeon: the SVG has no visible shapes');
+  const G = g.getCTM().inverse();
+  const place = c.place || { cx: 0.5, cy: c.text1 ? 0.43 : 0.5, bw: 0.62, bh: c.text1 ? 0.48 : 0.56 };
+  const k = Math.min((place.bw * W) / bb.width, (place.bh * H) / bb.height);
+  const ox = place.cx * W - (bb.width * k) / 2, oy = place.cy * H - (bb.height * k) / 2;
+  const xs = [], ys = [], cum = [], lift = [];               // flat pen track: point, length so far, pen-up before it
+  let total = 0;
+  const shapes = [...g.querySelectorAll('path,circle,ellipse,rect,line,polyline,polygon')]
+    .filter((e) => !e.closest('defs,clipPath,mask,symbol,pattern,marker') && typeof e.getTotalLength === 'function');
+  for (const e of shapes) {
+    let len = 0; try { len = e.getTotalLength(); } catch (_) { continue; }
+    if (!(len > 0)) continue;
+    const M = G.multiply(e.getCTM()), sc = Math.sqrt(Math.abs(M.a * M.d - M.b * M.c)) || 1;
+    const n = Math.max(2, Math.ceil((len * sc * k) / 1.2)), pts = [];
+    for (let i = 0; i <= n; i++) {
+      const p = e.getPointAtLength((len * i) / n), q = new DOMPoint(p.x, p.y).matrixTransform(M);
+      pts.push([(q.x - bb.x) * k + ox, (q.y - bb.y) * k + oy]);
+    }
+    const seg = (len * sc * k) / n;                           // expected spacing; a much longer step is a moveto
+    pts.forEach(([x, y], i) => {
+      let up = i === 0, dd = 0;
+      if (i > 0) { dd = Math.hypot(x - xs[xs.length - 1], y - ys[ys.length - 1]); if (dd > Math.max(4, 3 * seg)) { up = true; dd = 0; } }
+      total += dd; xs.push(x); ys.push(y); cum.push(total); lift.push(up);
+    });
+  }
+  if (!(total > 0)) throw new Error('writeon: found no outlines to draw');
+  const doc = new DOMParser().parseFromString(c.svg, 'image/svg+xml').documentElement;
+  doc.setAttribute('viewBox', `${bb.x} ${bb.y} ${bb.width} ${bb.height}`);
+  doc.setAttribute('width', bb.width * k); doc.setAttribute('height', bb.height * k); doc.setAttribute('preserveAspectRatio', 'none');
+  const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(doc));
+  await img.decode();
+  host.remove();
+  const d = c.dur ?? 4.5, secs = c.write ?? Math.min(2.2, 0.48 * d);
+  WR = { xs, ys, cum, lift, total, img, ox, oy, w: bb.width * k, h: bb.height * k, cx: place.cx * W, cy: place.cy * H,
+         start: 0, secs, hit: 0.86 * secs, lw: Math.max(1.5, 0.0028 * H),
+         textY: place.cy + (bb.height * k) / 2 / H + 0.075 };
+}
+// pen length at time t (smooth spring launched at half speed: moving from frame 1, slows onto the last stroke, never
+// past the end)
+const penAt = (t) => WR.total * Spring.clamp01(prog(t, WR.start, timed('smooth', WR.secs, 0.5)));
+// a spring at rest kicked with velocity v0 at t0: goes out, comes back, settles (0 before t0)
+const kick = (t, t0, v0, name) => prog(t, t0, { ...P[name], v0 }) - prog(t, t0, { ...P[name], v0: 0 });
+function penPoint(s) {                                       // position on the track at pen length s (binary search)
+  const { xs, ys, cum, lift } = WR; let lo = 0, hi = cum.length - 1;
+  if (s <= 0) return [xs[0], ys[0]];
+  while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < s) lo = m + 1; else hi = m; }
+  if (lo === 0 || lift[lo]) return [xs[lo], ys[lo]];
+  const f = (s - cum[lo - 1]) / ((cum[lo] - cum[lo - 1]) || 1);
+  return [xs[lo - 1] + (xs[lo] - xs[lo - 1]) * f, ys[lo - 1] + (ys[lo] - ys[lo - 1]) * f];
+}
+function strokeTo(cx, s) {                                   // the outline written so far, as one path
+  const { xs, ys, cum, lift } = WR; cx.beginPath();
+  for (let i = 0; i < xs.length; i++) {
+    if (cum[i] > s && !lift[i]) { const [x, y] = penPoint(s); cx.lineTo(x, y); break; }
+    if (cum[i] > s) break;
+    if (lift[i]) cx.moveTo(xs[i], ys[i]); else cx.lineTo(xs[i], ys[i]);
+  }
+}
+// deterministic hash -> 0..1 (sparks are a pure function of t)
+const h01 = (n) => { let x = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b); x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35); x ^= x >>> 16; return (x >>> 0) / 4294967296; };
+function drawWriteon(cx, t, dur) {
+  const w = WR, s = t >= w.hit ? w.total : penAt(t), H0 = 1080;
+  const fill = fadeIn(t, w.hit, timed('smooth', 0.3)), tip = 1 - fadeIn(t, w.hit, timed('smooth', 0.25));
+  const pop = 1 + 0.045 * kick(t, w.hit, 6, 'snappy');                // the hit: the mark pops on a spring
+  const push = 0.96 + 0.06 * prog(t, 0, timed('smooth', dur * 1.4, 1));  // slow push, still moving at the end
+  const k = push * pop;
+  cx.save(); cx.translate(w.cx, w.cy); cx.scale(k, k); cx.translate(-w.cx, -w.cy);
+  if (fill > 0.001) {                                        // the logo's own fills, with light sweeps across them
+    tctx.clearRect(0, 0, W, H); tctx.drawImage(w.img, w.ox, w.oy, w.w, w.h);
+    glint(sweep(t, w.hit + 0.3, 0.9), 0.5); glint(sweep(t, w.hit + 0.95, 0.9), 0.4);   // two sweeps, overlapping
+    cx.save(); cx.globalAlpha = fill; cx.drawImage(tmp, 0, 0); cx.restore();
+  }
+  const so = 1 - fill;
+  if (s > 0 && so > 0.001) {                                 // the ink: soft accent glow under a crisp text-colour line
+    cx.save(); cx.lineJoin = 'round'; cx.lineCap = 'round';
+    strokeTo(cx, s);
+    cx.shadowColor = ACCENT; cx.shadowBlur = w.lw * 5; cx.strokeStyle = ACCENT; cx.lineWidth = w.lw * 1.8; cx.globalAlpha = so * 0.55; cx.stroke();
+    cx.shadowBlur = 0; cx.strokeStyle = TXT; cx.lineWidth = w.lw; cx.globalAlpha = so; cx.stroke();
+    cx.restore();
+  }
+  cx.restore();
+  // light: bloom flash at the hit (accent, decays on a launched smooth spring), sparks, the pen tip
+  cx.save(); cx.globalCompositeOperation = 'lighter';
+  if (t >= w.hit) {
+    const a = 0.42 * (1 - Spring.clamp01(prog(t, w.hit, timed('smooth', 0.9, 1))));
+    if (a > 1e-5) {                                           // no cut-off: it fades to nothing
+      const R0 = 0.9 * W, gr = cx.createRadialGradient(w.cx, w.cy, 0, w.cx, w.cy, R0);
+      // purely radial falloff (no flat centre), so 8-bit alpha steps move as rings instead of whole-disc pops
+      gr.addColorStop(0, ACCENT); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      cx.globalAlpha = Math.min(1, a * 2.0); cx.fillStyle = gr; cx.fillRect(0, 0, W, H);
+    }
+  }
+  const spark = (e, te, px, py, sp0, life, a0) => {          // one spark: emitted at te from (px, py), gravity, fade
+    const age = t - te; if (age < 0 || age > life) return;
+    const ang = h01(e * 7 + 1) * 2 * Math.PI, spd = sp0 * (0.3 + 0.7 * h01(e * 13 + 2)) / H0 * H;
+    const x = px + Math.cos(ang) * spd * age, y = py + Math.sin(ang) * spd * age + 0.5 * (260 / H0 * H) * age * age;
+    const r = (0.8 + 1.6 * h01(e * 31 + 3)) / H0 * H;
+    cx.globalAlpha = a0 * (1 - age / life) ** 2; cx.fillStyle = h01(e * 5 + 4) < 0.5 ? ACCENT : '#ffffff';
+    cx.beginPath(); cx.arc(x, y, r, 0, 2 * Math.PI); cx.fill();
+  };
+  const RATE = 120, LIFE = 0.45;                              // trail sparks: 120/s from the moving tip
+  for (let e = Math.floor((t - LIFE) * RATE); e <= Math.floor(t * RATE); e++) {
+    const te = e / RATE; if (te < w.start || te >= w.hit || h01(e) > 0.55) continue;
+    const [px, py] = penPoint(penAt(te)); spark(e, te, px, py, 260, LIFE, 0.9);
+  }
+  const [ex, ey] = penPoint(w.total);                         // burst at the hit, from the pen's last point
+  for (let e = 0; e < 48; e++) spark(100000 + e, w.hit, ex, ey, 620, 0.7, 1.0);
+  if (tip > 0.001 && s > 0) {
+    const [x, y] = penPoint(s), R0 = 0.03 * H, gr = cx.createRadialGradient(x, y, 0, x, y, R0);
+    gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.18, ACCENT); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.globalAlpha = tip; cx.fillStyle = gr; cx.beginPath(); cx.arc(x, y, R0, 0, 2 * Math.PI); cx.fill();
+  }
+  cx.restore();
+}
+// measured on a reference show-open (124 frames at 29.97 fps): camera = the sign's centre (frame fractions) and scale, one spring
+// each (overdamped: slower to settle than the smooth preset, which is the nearest); flicker = [frame, level] steps.
+const LOCKUP = {
+  camX: { from: 0.46450, to: 0.49995, zeta: 2.4998, omega: 10.026, v0: 0 },
+  camY: { from: -0.54750, to: 0.33473, zeta: 1.2357, omega: 3.8917, v0: 1.2666 * 3.8917 },   // first 8 frames from the light-bar row
+  camS: { from: 2.4949, to: 1.0, zeta: 2.4005, omega: 11.139, v0: 0 },
+  // final layout (frame fractions: centre x, centre y, width, cap height)
+  top: [0.4951, 0.2032, 0.0844, 0.0593], head: [0.4932, 0.3236, 0.4536, 0.1111], sub: [0.4930, 0.4194, 0.3208, 0.0435],
+  // flicker = [frame at 29.97 fps from the section start, level] steps
+  flick: {
+    top:   [[0, 0], [17, 0.5], [27, 1], [32, 0.5], [40, 1], [71, 0.5], [73, 1]],
+    head:  [[0, 0], [11, 0.5], [13, 1], [15, 0.5], [21, 1], [22, 0.5], [23, 1], [24, 0.5], [25, 1],
+            [26, 0.5], [27, 1], [32, 0.5], [40, 1], [71, 0.5], [73, 1]],
+    sub:   [[0, 0], [10, 0.5], [21, 1], [26, 0.5], [38, 1], [70, 0.5], [72, 1]],
+  },
+  // set focus (the background's contrast against the final frame, mean brightness unchanged = softness, not light):
+  // 0.41 until frame 28, where it snaps up and a spring carries it to sharp; drawn as blur = focusPx * (1 - level).
+  // Blinks: the set's lights drop to half for 2 frames (contrast and brightness both fall).
+  focusPx: 6,
+  lightLow: 0.41, lightAt: 28, light: { from: 0.6057, to: 1.0, zeta: 1.6177, omega: 3.1914, v0: 1.3826 * 3.1914 },
+  blinks: [26, 30, 38, 42, 78, 82], blinkLen: 2, blinkLevel: 0.49,
+};
+const stepAt = (steps, t) => { const f = t * 29.97 + 0.01; let v = steps[0][1]; for (const [f0, l] of steps) if (f >= f0) v = l; return v; };
+const camAt = (t) => ({ x: move(t, 0, LOCKUP.camX.from, LOCKUP.camX.to, LOCKUP.camX), y: move(t, 0, LOCKUP.camY.from, LOCKUP.camY.to, LOCKUP.camY),
+                        s: move(t, 0, LOCKUP.camS.from, LOCKUP.camS.to, LOCKUP.camS) });
+// text fitted to a measured box: cap height = box height, width = box width
+function fitText(cx, str, font, box, mode, color, lw, spacing) {
+  if (!str) return;
+  const [bx, by, bw, bh] = box; cx.save(); cx.font = `100px ${font}`; cx.letterSpacing = (spacing || 0) + 'px';
+  const m = cx.measureText(str), cap = m.actualBoundingBoxAscent || 70, k = (bh * H) / cap;
+  const wdt = m.actualBoundingBoxLeft + m.actualBoundingBoxRight || m.width;
+  cx.translate(bx * W, by * H + (bh * H) / 2); cx.scale((bw * W) / wdt, k); cx.textAlign = 'center'; cx.textBaseline = 'alphabetic';
+  if (mode === 'stroke') { cx.lineWidth = lw / k; cx.strokeStyle = color; cx.lineJoin = 'round'; cx.strokeText(str, 0, 0); }
+  else { cx.fillStyle = color; cx.fillText(str, 0, 0); }
+  cx.restore();
+}
+function drawSign(cx) {                                   // drawn fallback when there is no --plate
+  const g = cx.createRadialGradient(W * 0.5, H * 0.35, 0, W * 0.5, H * 0.35, W * 0.7); g.addColorStop(0, '#202323'); g.addColorStop(1, '#070808');
+  cx.fillStyle = g; cx.fillRect(-W, -H, 3 * W, 3 * H);
+  cx.fillStyle = '#121414'; cx.fillRect(0.235 * W, 0.05 * H, 0.54 * W, 0.56 * H);
+  cx.strokeStyle = 'rgba(255,255,255,0.06)'; cx.lineWidth = 3;
+  for (let y = 0.08; y < 0.6; y += 0.026) { cx.beginPath(); cx.moveTo(0.235 * W, y * H); cx.lineTo(0.775 * W, y * H); cx.stroke(); }
+  cx.fillStyle = '#E8ECEC';
+  [[0.26, 0.067, 0.485, 0.006], [0.249, 0.586, 0.501, 0.006], [0.226, 0.1, 0.004, 0.48], [0.773, 0.075, 0.004, 0.48]]
+    .forEach(([x, y, w, h]) => cx.fillRect(x * W, y * H, w * W, h * H));
+  cx.strokeStyle = 'rgba(200,205,205,0.25)'; cx.lineWidth = 0.012 * W;
+  for (let x = 0.04; x < 1; x += 0.0958) { if (x > 0.2 && x < 0.8) continue; cx.beginPath(); cx.moveTo((x - 0.02) * W, 0.56 * H); cx.lineTo((x + 0.02) * W, 0.64 * H);
+    cx.moveTo((x + 0.02) * W, 0.56 * H); cx.lineTo((x - 0.02) * W, 0.64 * H); cx.stroke(); }
+}
+function lockupLayer(cx, t, c) {
+  const L = LOCKUP, f = L.flick, cam = camAt(t), fr = t * 29.97 + 0.01;
+  const focus = fr < L.lightAt ? L.lightLow : Spring.clamp01(move(t, L.lightAt / 29.97, L.light.from, L.light.to, L.light));
+  const light = L.blinks.some((b) => fr >= b && fr < b + L.blinkLen) ? L.blinkLevel : 1, blur = L.focusPx * (1 - focus);
+  cx.save(); cx.fillStyle = '#000'; cx.fillRect(0, 0, W, H);
+  cx.setTransform(cam.s, 0, 0, cam.s, cam.x * W - cam.s * L.camX.to * W, cam.y * H - cam.s * L.camY.to * H);
+  cx.globalAlpha = light;                                  // blinks: the set's lights dip (over black)
+  if (blur > 0.3) cx.filter = `blur(${(blur / cam.s).toFixed(2)}px)`;   // focus pull (radius in frame px)
+  if (plateImg) cx.drawImage(plateImg, 0, 0, W, H); else drawSign(cx);
+  cx.filter = 'none';
+  cx.globalAlpha = stepAt(f.top, t); fitText(cx, c.text1 ?? (cfg.callSign || cfg.display || 'BRAND').toUpperCase(), 'BodyM', L.top, 'fill', TXT, 0, 2);
+  cx.globalAlpha = stepAt(f.head, t); fitText(cx, c.text2 ?? cfg.lockupTitle ?? 'SHOW TITLE', 'Head', L.head, 'stroke', ACCENT, 2.6, 4);
+  cx.globalAlpha = stepAt(f.sub, t); fitText(cx, c.text3 ?? cfg.lockupLine ?? 'DAY | TIME | LIVE', 'BodyM', L.sub, 'fill', TXT, 0, 45);
+  cx.restore();
+  grain(cx, t);
+}
+// film grain like the original's (~0.8 grey levels at its dark levels): 4 fixed noise tiles at half size (2 px grain),
+// one per frame in a fixed order, laid over the frame (overlay), so a settled hold is never frozen. Deterministic.
+let grainTiles = null;
+function grain(cx, t) {
+  if (!grainTiles) {
+    grainTiles = []; let seed = 1234567;
+    const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
+    for (let k = 0; k < 4; k++) {
+      const c = document.createElement('canvas'); c.width = W / 2; c.height = H / 2; const x = c.getContext('2d'), d = x.createImageData(c.width, c.height);
+      for (let i = 0; i < d.data.length; i += 4) { const g = 128 + 6 * (rnd() + rnd() + rnd() - 1.5) * 2; d.data[i] = d.data[i + 1] = d.data[i + 2] = g; d.data[i + 3] = 255; }
+      x.putImageData(d, 0, 0); grainTiles.push(c);
+    }
+  }
+  cx.save(); cx.globalCompositeOperation = 'overlay'; cx.imageSmoothingEnabled = false;
+  cx.drawImage(grainTiles[((Math.floor(t * 29.97 + 0.01) % 4) + 4) % 4], 0, 0, W, H); cx.restore();
+}
+let lockBuf = null;
+function drawLockup(cx, t, c) {
+  const fps = c.fps || 60, n = 6, shutter = 0.5 / fps, v = Math.abs(Spring.velocity(t, { from: LOCKUP.camY.from, to: LOCKUP.camY.to, ...LOCKUP.camY })) * H;
+  if (v * shutter < 0.75) { lockupLayer(cx, t, c); return; } // under ~1 px of travel in the shutter: no blur needed
+  if (!lockBuf) { lockBuf = document.createElement('canvas'); lockBuf.width = W; lockBuf.height = H; }
+  const b = lockBuf.getContext('2d');
+  for (let i = 0; i < n; i++) {                            // running average of sub-frame samples = box-filter motion blur
+    lockupLayer(b, t - shutter * (i / (n - 1)), c);
+    cx.save(); cx.globalAlpha = 1 / (i + 1); cx.drawImage(lockBuf, 0, 0); cx.restore();
+  }
+}
+function bugPos(scale, ry, rx, op) { return { cx: 0.87, cy: 0.855, bw: 0.17, bh: 0.13, scale: Math.max(scale, 0.001), ry, rx, op }; }
+// the loop's sway: period 3 s (two per 6 s loop), ry and rx a quarter turn apart (an ellipse, never at rest)
+function bugSway(t) { const a = (t / 3) * 2 * Math.PI; return { ry: 0.22 * Math.sin(a), rx: 0.10 * (Math.cos(a) - 1) }; }
+// two light sweeps per loop (0.8 s each, crossing the bug as the sway turns at 0.75 s and 3.75 s), done before the loop point
+function loopSweep(t) { const g = sweep(t, 0.4, 0.8); return g > 0 && g < 1 ? g : sweep(t, 3.4, 0.8); }
+// ---- L4 echo --------------------------------------------------------------------------------------------------------
+function outlinePath(cx) {                                   // the whole outline as one path, in frame coordinates
+  const w = WR; cx.beginPath();
+  for (let i = 0; i < w.xs.length; i++) (w.lift[i] ? cx.moveTo(w.xs[i], w.ys[i]) : cx.lineTo(w.xs[i], w.ys[i]));
+}
+function drawEcho(cx, t) {
+  const CUT = 0.55, n = 7;
+  for (let i = n - 1; i >= 0; i--) {                         // echoes: each a beat later, growing, fading
+    const st = 0.06 * i, p = Spring.clamp01(prog(t, st, timed('smooth', 0.75, 0.6)));
+    if (t < st) continue;
+    const k = 0.7 + 1.9 * p, a = (1 - p) * fadeIn(t, st, timed('ui', 0.15));
+    if (a < 0.003) continue;
+    cx.save(); cx.translate(WR.cx, WR.cy); cx.scale(k, k); cx.translate(-WR.cx, -WR.cy);
+    outlinePath(cx); cx.globalAlpha = a; cx.strokeStyle = i % 2 ? ACCENT : TXT; cx.lineWidth = WR.lw * 1.6 / k; cx.lineJoin = 'round'; cx.stroke(); cx.restore();
+  }
+  // the cover: the logo silhouette in the primary colour swelling past the frame (full cover at the cut), then back
+  // need: the scale at which the panel just covers the frame from the mark's centre, so it closes exactly at the cut
+  const grow = Spring.clamp01(prog(t, 0.2, timed('smooth', CUT - 0.2))), shrink = 1 - Spring.clamp01(prog(t, CUT + 0.1, timed('smooth', 0.5)));
+  const cover = grow * shrink, need = 1.04 * Math.max(2 * Math.max(WR.cx, W - WR.cx) / WR.w, 2 * Math.max(WR.cy, H - WR.cy) / WR.h);
+  // on the way out, echoes fall back into the mark (the frame keeps moving until it clears)
+  for (let i = 0; i < 5; i++) {
+    const st = CUT + 0.18 + 0.06 * i, p = Spring.clamp01(prog(t, st, timed('smooth', 0.4)));
+    if (t < st) continue;
+    const k = 2.2 - 1.2 * p, a = 0.8 * Math.sin(Math.PI * p);
+    if (a < 0.003) continue;
+    cx.save(); cx.translate(WR.cx, WR.cy); cx.scale(k, k); cx.translate(-WR.cx, -WR.cy);
+    outlinePath(cx); cx.globalAlpha = a; cx.strokeStyle = i % 2 ? TXT : ACCENT; cx.lineWidth = WR.lw * 1.6 / k; cx.lineJoin = 'round'; cx.stroke(); cx.restore();
+  }
+  if (cover > 0.002) {
+    cx.save(); cx.translate(WR.cx, WR.cy); const k = cover * need; cx.scale(k, k); cx.translate(-WR.cx, -WR.cy);
+    cx.fillStyle = PRIMARY; cx.globalAlpha = Math.min(1, cover * 4); cx.beginPath(); cx.rect(WR.ox - 2, WR.oy - 2, WR.w + 4, WR.h + 4); cx.fill();
+    cx.restore();
+    cx.save(); cx.globalAlpha = fadeIn(t, CUT - 0.15, timed('smooth', 0.2)) * (1 - fadeIn(t, CUT + 0.35, timed('smooth', 0.3)));
+    cx.translate(WR.cx, WR.cy); const kk = 0.85 + 0.15 * prog(t, CUT - 0.15, 'snappy'); cx.scale(kk, kk); cx.translate(-WR.cx, -WR.cy);
+    cx.drawImage(WR.img, WR.ox, WR.oy, WR.w, WR.h); cx.restore();
+  }
+}
+
+// ---- L10 lightstreak -----------------------------------------------------------------------------------------------
+function drawStreak(cx, t, dur) {
+  const w = WR, s = t >= w.hit ? w.total : penAt(t), fill = fadeIn(t, w.hit, timed('smooth', 0.35));
+  const k = pushAt(t, dur) * (1 + 0.04 * kick(t, w.hit, 6, 'snappy'));
+  // timeline streaks racing across (behind), additive
+  cx.save(); cx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 9; i++) {
+    const st = 0.1 * i + 0.4 * h01(i * 7), y = H * (0.18 + 0.64 * h01(i * 13 + 1)), sp = 1.2 + h01(i * 3) * 0.8;
+    const p = (t - st) * sp; if (p < 0 || p > 1.6) continue;
+    const xh = -0.2 * W + p * 1.4 * W, len = 0.35 * W, gr = cx.createLinearGradient(xh - len, y, xh, y);
+    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, i % 3 ? ACCENT : '#ffffff');
+    cx.globalAlpha = 0.35 * (1 - fill * 0.7); cx.strokeStyle = gr; cx.lineWidth = Math.max(1.5, 0.002 * H); cx.beginPath(); cx.moveTo(xh - len, y); cx.lineTo(xh, y); cx.stroke();
+  }
+  cx.restore();
+  around(cx, k, () => {
+    logoFill(cx, t, w.hit, fill);
+    if (s > 0 && fill < 0.999) {
+      cx.save(); cx.lineJoin = 'round'; cx.lineCap = 'round';
+      strokeTo(cx, s); cx.globalAlpha = 0.28 * (1 - fill); cx.strokeStyle = TXT; cx.lineWidth = w.lw * 0.8; cx.stroke();   // what's been written (faint)
+      const trail = 0.22 * w.total, segs = 26;                // the long trail: bright at the head, fading back
+      cx.globalCompositeOperation = 'lighter';
+      for (let j = segs - 1; j >= 0; j--) {
+        const a0 = s - trail * (j + 1) / segs, a1 = s - trail * j / segs; if (a1 <= 0) continue;
+        const [x0, y0] = penPoint(Math.max(0, a0)), [x1, y1] = penPoint(a1), f = 1 - j / segs;
+        cx.globalAlpha = (1 - fill) * f * f; cx.strokeStyle = j < 3 ? '#ffffff' : ACCENT; cx.lineWidth = w.lw * (1 + 2.5 * f);
+        cx.shadowColor = ACCENT; cx.shadowBlur = w.lw * 8 * f; cx.beginPath(); cx.moveTo(x0, y0); cx.lineTo(x1, y1); cx.stroke();
+      }
+      const [hx, hy] = penPoint(s), R0 = 0.04 * H, gr = cx.createRadialGradient(hx, hy, 0, hx, hy, R0);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.2, ACCENT); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      cx.globalAlpha = 1 - fill; cx.fillStyle = gr; cx.beginPath(); cx.arc(hx, hy, R0, 0, 7); cx.fill(); cx.restore();
+    }
+  });
+  bloomAt(cx, t, w.hit);
+}
+
+// ---- S1 lightpaint -------------------------------------------------------------------------------------------------
+let LP = null;
+async function prepPaint(c) {
+  // each top-level <g> of the SVG is one scene: measured like writeon, scene by scene, laid out side by side
+  const ns = 'http://www.w3.org/2000/svg', host = document.createElement('div');
+  host.style.cssText = 'position:absolute;left:-100000px;top:0;visibility:hidden'; host.innerHTML = c.svg; document.body.appendChild(host);
+  const svg = host.querySelector('svg'); let groups = [...svg.children].filter((e) => e.tagName.toLowerCase() === 'g');
+  if (!groups.length) groups = [svg];
+  const scenes = [];
+  groups.forEach((g, gi) => {
+    const bb = g.getBBox(); if (!(bb.width > 0)) return;
+    const k = Math.min((0.6 * W) / bb.width, (0.6 * H) / bb.height), cxw = gi * 0.95 * W;     // scene gi sits at x = gi * 0.95 W
+    const G = svg.getScreenCTM().inverse(), track = []; let total = 0;
+    [...g.querySelectorAll('path,circle,ellipse,rect,line,polyline,polygon')].forEach((e) => {
+      let len = 0; try { len = e.getTotalLength(); } catch (_) { return; } if (!(len > 0)) return;
+      const M = G.multiply(e.getScreenCTM()), n = Math.max(2, Math.ceil(len * k / 2)), seg = (len * k) / n;
+      for (let i = 0; i <= n; i++) { const p = e.getPointAtLength(len * i / n), q = new DOMPoint(p.x, p.y).matrixTransform(M);
+        const x = cxw + W / 2 + (q.x - bb.x - bb.width / 2) * k, y = H * 0.48 + (q.y - bb.y - bb.height / 2) * k;
+        const prev = track[track.length - 1]; let d = i && prev ? Math.hypot(x - prev[0], y - prev[1]) : 0, up = i === 0;
+        if (d > Math.max(4, 3 * seg)) { up = true; d = 0; }          // a moveto inside the path: lift the light
+        total += d; track.push([x, y, total, up]); }
+    });
+    if (track.length) scenes.push({ track, total, cx: cxw + W / 2 });
+  });
+  host.remove();
+  const per = 2.4;
+  scenes.forEach((s, i) => { s.t0 = per * i; s.t1 = s.t0 + per * 0.78; });   // the first scene starts at frame 0
+  LP = { scenes, lw: Math.max(2, 0.003 * H) };
+  tpl.dur = per * scenes.length + 0.8;
+}
+function paintPoint(s, d) {
+  const tr = s.track; let lo = 0, hi = tr.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (tr[m][2] < d) lo = m + 1; else hi = m; }
+  return tr[lo];
+}
+function drawPaint(cx, t) {
+  // camera: follows the current scene on a smooth spring
+  let camX = LP.scenes[0].cx - W / 2;
+  LP.scenes.forEach((s, i) => { if (i && t >= s.t0 - 0.5) camX += (s.cx - LP.scenes[i - 1].cx) * Spring.clamp01(prog(t, s.t0 - 0.5, timed('smooth', 0.6, 0.4))); });
+  const drift = Spring.handheld(t, 0.004 * H, 0.2, 3);
+  cx.save(); cx.translate(-camX + drift[0], drift[1]); cx.lineJoin = 'round'; cx.lineCap = 'round';
+  for (const s of LP.scenes) {
+    if (t < s.t0) continue;
+    const d = s.total * Spring.clamp01(prog(t, s.t0, timed('smooth', s.t1 - s.t0, 0.5)));
+    cx.save(); cx.globalCompositeOperation = 'lighter'; cx.beginPath();
+    for (const [x, y, c, up] of s.track) { if (c > d) break; up ? cx.moveTo(x, y) : cx.lineTo(x, y); }
+    cx.strokeStyle = ACCENT; cx.shadowColor = ACCENT; cx.shadowBlur = LP.lw * 6; cx.lineWidth = LP.lw * 1.6; cx.globalAlpha = 0.55; cx.stroke();
+    cx.shadowBlur = 0; cx.strokeStyle = '#ffffff'; cx.lineWidth = LP.lw * 0.6; cx.globalAlpha = 0.9; cx.stroke();
+    if (d < s.total * 0.999) { const [hx, hy] = paintPoint(s, d), R0 = 0.035 * H, gr = cx.createRadialGradient(hx, hy, 0, hx, hy, R0);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, ACCENT); gr.addColorStop(1, 'rgba(0,0,0,0)'); cx.globalAlpha = 1; cx.fillStyle = gr;
+      cx.beginPath(); cx.arc(hx, hy, R0, 0, 7); cx.fill(); }
+    cx.restore();
+  }
+  // between scenes the light travels on to the next scene's first point (the camera follows it)
+  LP.scenes.forEach((s, i) => {
+    if (!i || t < s.t0 - 0.5 || t >= s.t0) return;
+    const a = LP.scenes[i - 1].track[LP.scenes[i - 1].track.length - 1], b = s.track[0];
+    const p = Spring.clamp01(prog(t, s.t0 - 0.5, timed('smooth', 0.5, 0.6))), x = a[0] + (b[0] - a[0]) * p, y = a[1] + (b[1] - a[1]) * p;
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    const tail = Math.max(0, p - 0.25), tx = a[0] + (b[0] - a[0]) * tail, ty = a[1] + (b[1] - a[1]) * tail, lg = cx.createLinearGradient(tx, ty, x, y);
+    lg.addColorStop(0, 'rgba(0,0,0,0)'); lg.addColorStop(1, ACCENT); cx.strokeStyle = lg; cx.lineWidth = LP.lw * 2; cx.lineCap = 'round';
+    cx.beginPath(); cx.moveTo(tx, ty); cx.lineTo(x, y); cx.stroke();
+    const R0 = 0.035 * H, gr = cx.createRadialGradient(x, y, 0, x, y, R0); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, ACCENT); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    cx.fillStyle = gr; cx.beginPath(); cx.arc(x, y, R0, 0, 7); cx.fill(); cx.restore();
+  });
+  cx.restore();
+  // the light ignites: an accent bloom from the first point (the opening hit)
+  const f0 = LP.scenes[0].track[0]; bloomAt(cx, t, 0.08, f0[0] - camX + drift[0], f0[1] + drift[1]);
+}
+
+// ---- shared by L3 / L9 / L2: the logo's fills landing as a hit -----------------------------------------------------
+// the line under the logo (text1), arriving after the hit
+const underLine = (t, c, hit) => c.text1 ? [{ str: c.text1, font: 'Head', size: 72, color: TXT, x: 0.5,
+  y: move(t, hit + 0.3, WR.textY + 0.03, WR.textY, timed('snappy', 0.6)), op: fadeIn(t, hit + 0.3, timed('smooth', 0.6)), spacing: 6 }] : [];
+// the fills at alpha a (with two light sweeps after the hit), drawn in the current transform
+function logoFill(cx, t, hit, a) {
+  if (a <= 0.001) return;
+  tctx.clearRect(0, 0, W, H); tctx.drawImage(WR.img, WR.ox, WR.oy, WR.w, WR.h);
+  glint(sweep(t, hit - 0.15, 0.9), 0.5); glint(sweep(t, hit + 0.45, 0.9), 0.4); glint(sweep(t, hit + 1.05, 0.9), 0.35);   // overlapping: never stalls
+  cx.save(); cx.globalAlpha *= a; cx.drawImage(tmp, 0, 0); cx.restore();
+}
+// accent bloom from the logo centre at the hit (purely radial: alpha steps move as rings, never a whole-disc pop)
+function bloomAt(cx, t, hit, x = WR.cx, y = WR.cy) {
+  if (t < hit) return;
+  const a = 0.42 * (1 - Spring.clamp01(prog(t, hit, timed('smooth', 0.9, 1))));
+  if (a <= 1e-5) return;
+  const gr = cx.createRadialGradient(x, y, 0, x, y, 0.9 * W); gr.addColorStop(0, ACCENT); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  cx.save(); cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = Math.min(1, a * 2); cx.fillStyle = gr; cx.fillRect(0, 0, W, H); cx.restore();
+}
+const pushAt = (t, dur) => 0.96 + 0.06 * prog(t, 0, timed('smooth', dur * 1.4, 1));     // slow push, still moving at the end
+function around(cx, k, fn) { cx.save(); cx.translate(WR.cx, WR.cy); cx.scale(k, k); cx.translate(-WR.cx, -WR.cy); fn(); cx.restore(); }
+// the pen track split into its outlines (subpaths), each resampled to n points by arc length
+function outlines(minPts = 12) {
+  const w = WR, polys = []; let cur = [];
+  for (let i = 0; i < w.xs.length; i++) { if (w.lift[i] && cur.length) { polys.push(cur); cur = []; } cur.push([w.xs[i], w.ys[i]]); }
+  if (cur.length) polys.push(cur);
+  return polys.filter((p) => p.length >= minPts);
+}
+function resample(p, n) {
+  const L = [0]; for (let i = 1; i < p.length; i++) L.push(L[i - 1] + Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]));
+  const out = [], tot = L[L.length - 1] || 1; let j = 0;
+  for (let k = 0; k < n; k++) { const s = (tot * k) / n; while (j < L.length - 2 && L[j + 1] < s) j++;
+    const f = (s - L[j]) / ((L[j + 1] - L[j]) || 1); out.push([p[j][0] + (p[j + 1][0] - p[j][0]) * f, p[j][1] + (p[j + 1][1] - p[j][1]) * f]); }
+  return out;
+}
+const areaOf = (p) => p.reduce((s, q, i) => { const r = p[(i + 1) % p.length]; return s + q[0] * r[1] - r[0] * q[1]; }, 0) / 2;
+
+// ---- L3 morph ------------------------------------------------------------------------------------------------------
+let MO = null;
+function prepMorph() {
+  const N = 96, polys = outlines().map((p) => resample(p, N));
+  const shapes = polys.map((rs, k) => {
+    const A = areaOf(rs), cx0 = rs.reduce((s, q) => s + q[0], 0) / N, cy0 = rs.reduce((s, q) => s + q[1], 0) / N;
+    const r = Math.max(3, Math.sqrt(Math.abs(A) / Math.PI)), dir = A >= 0 ? 1 : -1;      // keep the winding (holes stay holes)
+    const a0 = Math.atan2(rs[0][1] - cy0, rs[0][0] - cx0);
+    const start = rs.map((_, i) => [Math.cos(a0 + dir * 2 * Math.PI * i / N) * r, Math.sin(a0 + dir * 2 * Math.PI * i / N) * r]);
+    const ang = h01(k * 17 + 3) * 2 * Math.PI, dist = (0.18 + 0.32 * h01(k * 29 + 5)) * Math.min(W, H);
+    return { rs, cx: cx0, cy: cy0, r, start, ox: cx0 + Math.cos(ang) * dist, oy: cy0 + Math.sin(ang) * dist, delay: 0.25 * h01(k * 7 + 1), area: Math.abs(A) };
+  }).filter((s) => s.area > 4);
+  MO = { shapes, hit: 1.85 };
+}
+function drawMorph(cx, t, dur) {
+  const fill = fadeIn(t, MO.hit, timed('smooth', 0.3)), k = pushAt(t, dur) * (1 + 0.045 * kick(t, MO.hit, 6, 'snappy'));
+  around(cx, k, () => {
+    if (fill < 0.999) {                                  // the shapes: travel in, then morph circle -> outline
+      cx.save(); cx.globalAlpha = (1 - fill) * fadeIn(t, 0, timed('ui', 0.25)); cx.beginPath();
+      for (const s of MO.shapes) {
+        const tr = Spring.clamp01(prog(t, s.delay, timed('smooth', 1.0, 0.5))), m = Spring.clamp01(prog(t, 0.75 + s.delay * 0.6, timed('smooth', 0.95)));
+        const ccx = s.ox + (s.cx - s.ox) * tr, ccy = s.oy + (s.cy - s.oy) * tr;
+        s.rs.forEach(([x, y], i) => { const px = ccx + s.start[i][0] + ((x - s.cx) - s.start[i][0]) * m, py = ccy + s.start[i][1] + ((y - s.cy) - s.start[i][1]) * m;
+          i ? cx.lineTo(px, py) : cx.moveTo(px, py); });
+        cx.closePath();
+      }
+      cx.shadowColor = ACCENT; cx.shadowBlur = 0.012 * H; cx.fillStyle = TXT; cx.fill('nonzero'); cx.restore();
+    }
+    logoFill(cx, t, MO.hit, fill);
+  });
+  bloomAt(cx, t, MO.hit);
+}
+
+// ---- L9 pixelbuild -------------------------------------------------------------------------------------------------
+let PX = null;
+function prepPixel() {
+  const w = WR, g = Math.max(6, Math.round(0.011 * H));
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d', { willReadFrequently: true });
+  x.drawImage(w.img, w.ox, w.oy, w.w, w.h);
+  const d = x.getImageData(0, 0, W, H).data, dots = [];
+  for (let y = w.oy + g / 2; y < w.oy + w.h; y += g) for (let xx = w.ox + g / 2; xx < w.ox + w.w; xx += g) {
+    const i = (Math.round(y) * W + Math.round(xx)) * 4; if (d[i + 3] > 128) dots.push({ x: xx, y, col: `rgb(${d[i]},${d[i + 1]},${d[i + 2]})`, dist: Math.hypot(xx - w.cx, y - w.cy) });
+  }
+  const maxd = Math.max(1, ...dots.map((o) => o.dist));
+  dots.forEach((o, k) => { o.delay = 0.85 * (o.dist / maxd) + 0.08 * h01(k * 13 + 7);
+    o.sx = WR.cx + (h01(k * 3 + 1) - 0.5) * 0.16 * H; o.sy = WR.cy + (h01(k * 3 + 2) - 0.5) * 0.16 * H; });   // a burst around the centre
+  const sp = document.createElement('canvas'), R = Math.ceil(g * 1.6); sp.width = sp.height = 2 * R;
+  const sx = sp.getContext('2d'), gr = sx.createRadialGradient(R, R, 0, R, R, R);
+  gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.3, ACCENT); gr.addColorStop(1, 'rgba(0,0,0,0)'); sx.fillStyle = gr; sx.fillRect(0, 0, 2 * R, 2 * R);
+  const last = Math.max(...dots.map((o) => o.delay));
+  PX = { dots, g, sprite: sp, R, hit: last + 0.45 };
+}
+function drawPixel(cx, t, dur) {
+  const P0 = PX, fill = fadeIn(t, P0.hit, timed('smooth', 0.45)), k = pushAt(t, dur) * (1 + 0.03 * kick(t, P0.hit, 6, 'snappy'));
+  around(cx, k, () => {
+    const back = 1 - fadeIn(t, P0.hit, timed('smooth', 0.6));        // dots fade back as the clean mark resolves
+    if (back > 0.001) {
+      cx.save();
+      for (const o of P0.dots) {
+        if (t < o.delay - 0.05) continue;
+        const p = prog(t, o.delay, 'snappy'), x = o.sx + (o.x - o.sx) * p, y = o.sy + (o.y - o.sy) * p;
+        const a = fadeIn(t, o.delay - 0.05, timed('ui', 0.2)) * back, r = P0.g * 0.42 * (0.7 + 0.3 * back);
+        cx.globalAlpha = a; cx.fillStyle = o.col; cx.beginPath(); cx.arc(x, y, r, 0, 7); cx.fill();
+        const glow = 0.8 * (1 - Spring.clamp01(prog(t, o.delay + 0.12, timed('smooth', 0.7, 1))));   // bloom as it lands
+        if (glow > 0.01) { cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = glow * back; cx.drawImage(P0.sprite, x - P0.R, y - P0.R); cx.globalCompositeOperation = 'source-over'; }
+      }
+      cx.restore();
+    }
+    logoFill(cx, t, P0.hit, fill);
+  });
+  bloomAt(cx, t, P0.hit);
+}
+
+// ---- L2 linebuild --------------------------------------------------------------------------------------------------
+let LB = null;
+function prepLines(c) {
+  const polys = outlines(4), chunks = [], tot = WR.total, seg = tot / 70;
+  for (const p of polys) {                                   // each outline cut into pieces of about 1/70 of the total
+    let acc = 0, cur = [p[0]];
+    for (let i = 1; i < p.length; i++) { acc += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); cur.push(p[i]);
+      if (acc >= seg) { chunks.push(cur); cur = [p[i]]; acc = 0; } }
+    if (cur.length > 1) chunks.push(cur);
+  }
+  chunks.forEach((ch, k) => {
+    const mx = ch.reduce((s, q) => s + q[0], 0) / ch.length, my = ch.reduce((s, q) => s + q[1], 0) / ch.length;
+    let dx = mx - WR.cx, dy = my - WR.cy; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    const far = (0.35 + 0.4 * h01(k * 11 + 2)) * W;          // starts on screen, near the edges
+    let off = [dx * far - dy * 0.08 * W * (h01(k * 5) - 0.5), dy * far + dx * 0.08 * W * (h01(k * 5) - 0.5)];
+    const kx = off[0] ? Math.min(1, Math.abs(((off[0] > 0 ? 0.97 * W : 0.03 * W) - mx) / off[0])) : 1;     // start on screen
+    const ky = off[1] ? Math.min(1, Math.abs(((off[1] > 0 ? 0.97 * H : 0.03 * H) - my) / off[1])) : 1;
+    ch.off = [off[0] * Math.min(kx, ky), off[1] * Math.min(kx, ky)];
+    ch.rank = h01(k * 19 + 3);
+  });
+  const order = chunks.map((ch, k) => k).sort((a, b) => chunks[a].rank - chunks[b].rank);
+  order.forEach((k, r) => { chunks[k].at = 1.15 * r / Math.max(1, order.length - 1); });   // the first piece moves at frame 0
+  const name = c.text1 || c.display || '';
+  LB = { chunks, hit: 1.95, grid: [2.35, 4.05], profile: [4.05, 5.75], fabric: [5.75, 99], name, weave: makeWeave() };
+}
+function makeWeave() {                                       // a small woven tile: over/under threads, light and dark
+  const s = 24, c = document.createElement('canvas'); c.width = c.height = s; const x = c.getContext('2d');
+  x.fillStyle = 'rgba(0,0,0,0)'; x.fillRect(0, 0, s, s);
+  for (let i = 0; i < s; i += 4) { x.fillStyle = (i / 4) % 2 ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.18)'; x.fillRect(0, i, s, 2); x.fillRect(i, 0, 2, s); }
+  return c;
+}
+function drawLinebuild(cx, t, c) {
+  const L = LB, dur = c.dur ?? 7.5, fill = fadeIn(t, L.hit, timed('smooth', 0.3));
+  // the mark moves with the phases: centre -> profile avatar -> back to centre for the fabric
+  const toAv = Spring.clamp01(prog(t, L.profile[0] + 0.1, timed('smooth', 0.7))), back = Spring.clamp01(prog(t, L.fabric[0], timed('smooth', 0.7)));
+  const av = { x: W * 0.5, y: H * 0.34, k: Math.min(0.16 * H / WR.h, 0.16 * H / WR.w) * 1.0 };
+  const mv = toAv * (1 - back), mx = WR.cx + (av.x - WR.cx) * mv, my = WR.cy + (av.y - WR.cy) * mv + bob(t) * mv, mk = 1 + (av.k - 1) * mv;
+  const k = pushAt(t, dur) * (1 + 0.045 * kick(t, L.hit, 6, 'snappy'));
+  // fabric ground (behind everything) in the last phase
+  const fab = fadeIn(t, L.fabric[0], timed('smooth', 0.5));
+  if (fab > 0.001) { cx.save(); cx.globalAlpha = fab; cx.fillStyle = PRIMARY; cx.fillRect(0, 0, W, H);
+    cx.fillStyle = cx.createPattern(L.weave, 'repeat'); cx.fillRect(0, 0, W, H); cx.restore(); }
+  // profile page card
+  const pa = fadeIn(t, L.profile[0], timed('smooth', 0.35)) * (1 - fadeIn(t, L.profile[1] - 0.1, timed('smooth', 0.3)));
+  if (pa > 0.001) drawProfileCard(cx, t, pa, av);
+  // construction grid
+  const ga = fadeIn(t, L.grid[0], timed('smooth', 0.3)) * (1 - fadeIn(t, L.grid[1] - 0.15, timed('smooth', 0.3)));
+  if (ga > 0.001) drawGrid(cx, t, ga);
+  cx.save(); cx.translate(mx, my); cx.scale(mk * k, mk * k); cx.translate(-WR.cx, -WR.cy);
+  if (fill < 0.999) {                                        // the lines: race in and lock onto the outline
+    cx.save(); cx.lineJoin = 'round'; cx.lineCap = 'round'; cx.globalAlpha = 1 - fill;
+    for (const ch of L.chunks) {
+      if (t < ch.at - 0.06) continue;
+      const p = Spring.clamp01(prog(t, ch.at, timed('smooth', 0.75, 0.6))), ox = ch.off[0] * (1 - p), oy = ch.off[1] * (1 - p);
+      cx.beginPath(); ch.forEach(([x, y], i) => (i ? cx.lineTo(x + ox, y + oy) : cx.moveTo(x + ox, y + oy)));
+      cx.strokeStyle = TXT; cx.lineWidth = WR.lw; cx.shadowColor = ACCENT; cx.shadowBlur = WR.lw * 4; cx.stroke();
+      if (p < 0.98) {                                        // a speed line behind each piece while it travels
+        const [x0, y0] = ch[0]; cx.beginPath(); cx.moveTo(x0 + ox, y0 + oy); cx.lineTo(x0 + ox * 1.25 + ch.off[0] * 0.08, y0 + oy * 1.25 + ch.off[1] * 0.08);
+        cx.strokeStyle = ACCENT; cx.globalAlpha = (1 - fill) * 0.5 * (1 - p); cx.lineWidth = WR.lw * 0.6; cx.stroke(); cx.globalAlpha = 1 - fill;
+      }
+    }
+    cx.restore();
+  }
+  if (fab > 0.001) drawPressed(cx, t, fab);                  // fabric: the mark pressed in
+  logoFill(cx, t, L.hit, fill * (1 - fab));
+  cx.restore();
+  bloomAt(cx, t, L.hit);
+  if (fab > 0.001) { tctx.clearRect(0, 0, W, H); }           // (a sweep crosses the fabric so the hold is never frozen)
+  if (fab > 0.001) { const g = sweep(t, L.fabric[0] + 0.4, 1.2); if (g > 0 && g < 1) { const x = -0.3 * W + g * 1.6 * W;
+    const gr = cx.createLinearGradient(x - 0.15 * W, 0, x + 0.15 * W, H * 0.3); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.12)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    cx.save(); cx.globalCompositeOperation = 'lighter'; cx.fillStyle = gr; cx.fillRect(0, 0, W, H); cx.restore(); } }
+}
+function drawGrid(cx, t, a) {                                // construction grid drawing on around the mark
+  const L = LB, x0 = WR.ox, y0 = WR.oy, w = WR.w, h = WR.h, r = Math.min(Math.max(w, h) * 0.5, 0.36 * H);   // stays in frame
+  const items = [
+    (p) => { cx.beginPath(); cx.rect(x0, y0, w, h); return 2 * (w + h) * p; },
+    (p) => { cx.beginPath(); cx.moveTo(WR.cx, y0 - 0.12 * H); cx.lineTo(WR.cx, y0 + h + 0.12 * H); return (h + 0.24 * H) * p; },
+    (p) => { cx.beginPath(); cx.moveTo(x0 - 0.08 * W, WR.cy); cx.lineTo(x0 + w + 0.08 * W, WR.cy); return (w + 0.16 * W) * p; },
+    (p) => { cx.beginPath(); cx.arc(WR.cx, WR.cy, r * 1.08, 0, 2 * Math.PI); return 2 * Math.PI * r * 1.08 * p; },
+    (p) => { cx.beginPath(); cx.arc(WR.cx, WR.cy, r * 0.62, 0, 2 * Math.PI); return 2 * Math.PI * r * 0.62 * p; },
+    (p) => { cx.beginPath(); cx.moveTo(x0, y0); cx.lineTo(x0 + w, y0 + h); return Math.hypot(w, h) * p; },
+    (p) => { cx.beginPath(); cx.moveTo(x0 + w, y0); cx.lineTo(x0, y0 + h); return Math.hypot(w, h) * p; },
+  ];
+  cx.save(); cx.globalAlpha = a; cx.strokeStyle = ACCENT; cx.lineWidth = Math.max(1.5, 0.0016 * H);
+  items.forEach((fn, i) => { const p = Spring.clamp01(prog(t, L.grid[0] + 0.12 * i, timed('smooth', 0.7))); if (p <= 0) return;
+    const len = fn(1); fn(1); cx.setLineDash([len * p, len]); cx.stroke(); });
+  // a dashed guide circle turning slowly (keeps the grid alive)
+  cx.save(); cx.translate(WR.cx, WR.cy); cx.rotate((t - L.grid[0]) * 0.6); cx.setLineDash([0.02 * H, 0.014 * H]);
+  cx.globalAlpha = a * 0.7 * fadeIn(t, L.grid[0] + 0.3, timed('smooth', 0.5)); cx.beginPath(); cx.arc(0, 0, r * 0.85, 0, 2 * Math.PI); cx.stroke(); cx.restore();
+  cx.setLineDash([]); cx.fillStyle = ACCENT; cx.font = `${Math.round(0.018 * H)}px Body`;
+  const la = fadeIn(t, L.grid[0] + 0.6, timed('smooth', 0.4)); cx.globalAlpha = a * la;
+  cx.fillText(`${Math.round(w)} x ${Math.round(h)}`, x0, y0 - 0.02 * H); cx.restore();
+}
+// the profile page floats gently (a continuous bob, a function of t) so it never sits frozen
+const bob = (t) => 0.008 * H * Math.sin(2 * Math.PI * 0.45 * (t - LB.profile[0])) * Spring.clamp01(prog(t, LB.profile[0], timed('smooth', 0.6)));
+function drawProfileCard(cx, t, a, av) {                     // a generic profile page the mark sits in as the avatar
+  const L = LB, up = (1 - prog(t, L.profile[0], 'snappy')) * 0.08 * H + bob(t);
+  const cw = 0.42 * W, ch = 0.78 * H, x = (W - cw) / 2, y = 0.12 * H + up, r = 0.02 * H;
+  cx.save(); cx.globalAlpha = a;
+  cx.fillStyle = '#F4F5F7'; cx.beginPath(); cx.roundRect(x, y, cw, ch, r); cx.fill();
+  cx.fillStyle = PRIMARY; cx.beginPath(); cx.roundRect(x, y, cw, 0.2 * H, [r, r, 0, 0]); cx.fill();
+  cx.fillStyle = PRIMARY; cx.beginPath(); cx.arc(av.x, av.y + up, 0.1 * H, 0, 7); cx.fill();   // brand ground: a light mark reads
+  cx.fillStyle = '#1B1F24'; cx.font = `${Math.round(0.036 * H)}px Head`; cx.textAlign = 'center'; cx.fillText(L.name || '', W / 2, y + 0.4 * H);
+  cx.fillStyle = ACCENT; cx.beginPath(); cx.roundRect(W / 2 - 0.06 * W, y + 0.44 * H, 0.12 * W, 0.045 * H, 0.0225 * H); cx.fill();
+  cx.fillStyle = '#D8DCE2'; [0.53, 0.59, 0.65].forEach((yy, i) => { cx.beginPath(); cx.roundRect(x + 0.04 * W, y + yy * H, cw - 0.08 * W - i * 0.05 * W, 0.022 * H, 0.011 * H); cx.fill(); });
+  // a loading shimmer runs across the placeholder lines (keeps the page alive); clipped to the lines
+  const sx = x + ((t - L.profile[0]) * 0.55 % 1.2) * cw * 1.2 - 0.2 * cw;
+  cx.save(); cx.beginPath(); [0.53, 0.59, 0.65].forEach((yy, i) => cx.roundRect(x + 0.04 * W, y + yy * H, cw - 0.08 * W - i * 0.05 * W, 0.022 * H, 0.011 * H)); cx.clip();
+  const sg = cx.createLinearGradient(sx - 0.08 * W, 0, sx + 0.08 * W, 0); sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.85)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+  cx.fillStyle = sg; cx.fillRect(x, y, cw, ch); cx.restore();
+  cx.restore();
+}
+function drawPressed(cx, t, a) {                             // the mark pressed into the fabric: wave + emboss + weave
+  const w = WR, th = 3;
+  const b = document.createElement('canvas'); b.width = W; b.height = H; const bx = b.getContext('2d');
+  for (let y = Math.floor(w.oy) - 4; y < w.oy + w.h + 4; y += th) {      // displacement: rows shifted on a slow wave
+    const dx = 3 * Math.sin(y * 0.045 + t * 1.3); bx.drawImage(w.img, 0, (y - w.oy) * (w.img.height / w.h), w.img.width, th * (w.img.height / w.h), w.ox + dx, y, w.w, th);
+  }
+  const sh = (col, ox, oy, al) => { tctx.clearRect(0, 0, W, H); tctx.drawImage(b, 0, 0); tctx.globalCompositeOperation = 'source-in';
+    tctx.fillStyle = col; tctx.fillRect(0, 0, W, H); tctx.globalCompositeOperation = 'source-over'; cx.save(); cx.globalAlpha = a * al; cx.drawImage(tmp, ox, oy); cx.restore(); };
+  sh('#000000', 3, 3, 0.45); sh('#FFFFFF', -1.5, -1.5, 0.25);      // emboss: shadow below-right, light above-left
+  tctx.clearRect(0, 0, W, H); tctx.drawImage(b, 0, 0); tctx.globalCompositeOperation = 'source-atop';
+  tctx.fillStyle = tctx.createPattern(LB.weave, 'repeat'); tctx.fillRect(0, 0, W, H); tctx.globalCompositeOperation = 'source-over';
+  cx.save(); cx.globalAlpha = a * 0.92; cx.drawImage(tmp, 0, 0); cx.restore();
+}
 window.ready = true;
 </script></body></html>

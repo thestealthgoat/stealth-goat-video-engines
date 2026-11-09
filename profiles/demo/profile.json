@@ -1,0 +1,97 @@
+{
+  "name": "demo",
+  "display_name": "Demo Sports",
+  "about": "Copy made by `python3 engine/vprofile.py new <name>`. Replace every value; leave out what the org doesn't have. optional_paths: paths keys that exist only on some machines (show --check lists them as optional instead of failing). delivery.fps_allowed: other file rates qa.py accepts besides delivery.fps (e.g. 59.94 for reels made of 29.97 material shown at 2x).",
+  "brand": {
+    "colors": {
+      "primary": "#0B3D2E",
+      "accent": "#F2B705",
+      "text": "#FFFFFF"
+    },
+    "fonts": {
+      "head": "assets/Anton-Regular.ttf",
+      "body": "assets/BarlowCondensed-Medium.ttf",
+      "body_semibold": "{repo}/resources/fonts/BarlowCondensed-SemiBold.ttf"
+    },
+    "watch_line": "",
+    "logo_png": "assets/demo_logo.png"
+  },
+  "team": {
+    "home_abbr": "",
+    "home_name": "",
+    "foot": ""
+  },
+  "paths": {
+    "root": "{home}/Movies/video-work",
+    "assets": "{root}/Assets",
+    "music": "{assets}/Music"
+  },
+  "optional_paths": [
+    "assets",
+    "music",
+    "root"
+  ],
+  "path_map": [],
+  "delivery": {
+    "size": "1920x1080",
+    "fps": 29.97002997,
+    "fps_allowed": [],
+    "vertical_size": "1080x1920",
+    "loudness_lufs": -14,
+    "true_peak_db": -2,
+    "outputs": [
+      "mp4",
+      "premiere_xml"
+    ],
+    "web": {
+      "vcodec": "libx264",
+      "vcodec_fallback": "libx264",
+      "fallback_args": [
+        "-preset",
+        "fast"
+      ],
+      "profile": "high",
+      "b_v": "12M",
+      "maxrate": "14M",
+      "bufsize": "24M",
+      "acodec": "copy",
+      "faststart_max_gb": 10
+    }
+  },
+  "layout": {
+    "safe_px": 90
+  },
+  "style": {
+    "audio_fade_ms": 40,
+    "springs_default": "snappy"
+  },
+  "captions": {
+    "font": "body",
+    "font_index": 0,
+    "size": 76,
+    "size_vertical": 84,
+    "uppercase": false,
+    "text": "text",
+    "stroke": "#000000",
+    "stroke_width": 5,
+    "shadow": 0.55,
+    "box_color": "accent",
+    "box_width": 6,
+    "box_fill": "#00000059",
+    "box_radius": 14,
+    "box_pad": [
+      16,
+      6
+    ],
+    "y": 0.82,
+    "y_vertical": 0.7,
+    "max_width": 0.78,
+    "max_width_vertical": 0.86,
+    "band_y_vertical": 520,
+    "spring": "snappy"
+  },
+  "folders": {
+    "read_only": [],
+    "write_into": ""
+  }
+}

@@ -148,6 +148,18 @@ rc, j, log, _ = qa(fresh, "--kind", "explainer", "--size", "1280x720", "--cuts",
 g = next((x for x in (j or {}).get("gates", []) if x["gate"].startswith("freshness")), {})
 expect("explainer: a new element every second passes freshness", g.get("result") == "PASS", log)
 expect("explainer: one-frame pop-ons are warned", any(x["kind"] == "pop" for x in (j or {}).get("flags", [])), log)
+# a small state change (a readout-sized patch changing once a second, too small for the colour histogram) counts too
+ticks = ",".join(f"drawbox=x=900:y=120:w=90:h=50:color=0x{c}:t=fill:enable='gte(t,{0.8 + k:.1f})'"
+                 for k, c in enumerate(("E0E0E0", "40A040", "E0E0E0", "40A040")))
+small = render("explainer_small", drift + "," + ticks + "[v]", tone(5))
+rc, j, log, _ = qa(small, "--kind", "explainer", "--size", "1280x720", "--cuts", "none")
+g = next((x for x in (j or {}).get("gates", []) if x["gate"].startswith("freshness")), {})
+expect("explainer: a small readout changing every second passes freshness (local state change)",
+       g.get("result") == "PASS", log)
+blink = render("explainer_blink", drift + ",drawbox=x=900:y=120:w=90:h=50:color=0xE0E0E0:t=fill:enable='lt(mod(t,0.6),0.3)'[v]", tone(5))
+rc, j, log, _ = qa(blink, "--kind", "explainer", "--size", "1280x720", "--cuts", "none")
+g = next((x for x in (j or {}).get("gates", []) if x["gate"].startswith("freshness")), {})
+expect("explainer: a blinking patch (no new state) still fails freshness", g.get("result") == "FAIL", log)
 
 # 29.97 material in a 59.94 file repeats every other frame: one cadence note, not dozens of stutters
 c60 = render("cadence_59", [f"testsrc2=s={S}:r={R}:d=4,fps=60000/1001"], tone(4))

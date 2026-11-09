@@ -51,6 +51,7 @@ Rules:
 | `brand.fonts.*` | `head`, `body`, `body_semibold` (paths; relative ones are inside the profile folder) |
 | `brand.logo_svg`, `brand.logo_png`, ... | logo files (keys ending `_png`, `_svg`, `_mp4`, `_mov` are checked by `--check`) |
 | `brand.watch_line` | the "where to watch" line on end cards |
+| `brand.call_sign`, `brand.lockup_title`, `brand.lockup_line` | optional defaults for the logo `lockup` template's three lines (top line, outlined headline, subline) when `--text1/2/3` aren't given |
 | `team.home_abbr`, `team.home_name`, `team.foot` | short name, display name, footer line |
 | `paths.*` | folders; may use `{repo}`, `{profile}`, `{home}` and other `paths` keys. `*_out` folders may not exist yet |
 | `path_map` | `[[from, to], ...]`: a path under `from` becomes `to` when `from` is missing here and `to` exists |

@@ -22,7 +22,7 @@ fonttools>=4.40       # tested 4.68.0  redraw.py lettering
 playwright>=1.40      # tested 1.64.1  motion.py / render3d.py drive headless Chromium (python3 -m playwright install chromium)
 
 # cutouts (engine/cutout.py, cutouts/cutouts.py)
-rembg>=2.0.50         # tested 2.0.87  models download to ~/.u2net on first use
+rembg>=2.0.80         # tested 2.0.87 (BiRefNet sessions); models: engine/models.py
 onnxruntime>=1.16     # tested 1.31.1
 rapidocr-onnxruntime>=1.2   # tested 1.2.3   jersey-digit hint in cutouts.py (optional: a missing import is skipped)
 
@@ -33,3 +33,6 @@ faster-whisper>=1.0   # tested 1.2.1   pulls in PyAV (av) and ctranslate2; model
 #   torch + beat_this   optional neural cross-check in engine/beatmap.py, off unless BEATMAP_NN_CKPT is set
 #   opencv-contrib      logo/sr.py (AI upscaling) runs in its own venv logo/srenv, made by logo/setup.sh
 #   pytesseract         not imported; the scorebug reader calls the tesseract binary directly
+
+# maps (engine/routemap.py: Natural Earth shapefiles)
+pyshp>=2.3            # tested 3.1.7

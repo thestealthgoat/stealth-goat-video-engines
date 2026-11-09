@@ -15,3 +15,8 @@ tests/out/
 resources/models/*.pb
 # your own profiles stay out of git unless you mean to share them
 profiles/*/sample_card.png
+# your own work stays out of the engine's git
+/sites/
+/REFERENCE_IDEAS.md
+**/_build/
+examples/**/vo.*

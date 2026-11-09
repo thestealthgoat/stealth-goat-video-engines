@@ -25,6 +25,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import vprofile as prof  # noqa: E402
+if any(x in ('-h', '--help') for x in sys.argv[1:]):   # help before the profile loads
+    print(__doc__); sys.exit(0)
 P = prof.load(arg('--profile'))
 ROOT = P.path('root')
 KV = arg('--root')

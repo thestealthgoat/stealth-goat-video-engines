@@ -1,0 +1,10 @@
+{
+  "name": "ui-kit",
+  "version": "0.1.0",
+  "description": "A small design kit for apps and websites: brand colour tokens with measured contrast, type scale, spring UI motion, accessible components and focus states, plus one-page cinematic websites with an accessibility and privacy gate built in.",
+  "author": { "name": "thestealthgoat" },
+  "homepage": "https://github.com/thestealthgoat/stealth-goat-video-engines",
+  "repository": "https://github.com/thestealthgoat/stealth-goat-video-engines",
+  "license": "MIT",
+  "keywords": ["ui", "design system", "accessibility", "website", "css", "motion"]
+}

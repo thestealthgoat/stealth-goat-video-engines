@@ -1,0 +1,154 @@
+/*
+ * tokens.css - the ui-kit design tokens. Copy into the app, then:
+ *   1. Replace the colour block from your brand:  python3 scripts/palette.py make --primary "#..." --accent "#..." --write tokens.css
+ *   2. Measure it:                                 python3 scripts/palette.py check tokens.css   (every pair must pass)
+ *   3. Point the font tokens at fonts you are licensed to ship (self-host them with their licence file).
+ * Everything else (type scale, spacing, radius, shadow, focus, motion) is brand-neutral and rarely needs changing.
+ * Themes: light by default; dark follows the OS unless <html data-theme="light">; <html data-theme="dark"> forces dark.
+ * The placeholder colours below come from an example brand (primary #2348b8, accent #d9480f).
+ */
+
+/* colours:start - made by scripts/palette.py from primary #2348b8, accent #d9480f; measured, see palette.py check */
+:root {
+  --color-bg: #f8fafd;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f2fa;
+  --color-text: #070e25;
+  --color-text-muted: #676c7b;
+  --color-link: #c04112;
+  --color-action: #2348b8;
+  --color-on-action: #ffffff;
+  --color-highlight: #c8420e;
+  --color-on-highlight: #ffffff;
+  --color-border: #878b97;
+  --color-divider: #d6d9df;
+  --color-focus: #c04112;
+  --color-danger: #bf281c;
+  --color-success: #067647;
+  --color-warning: #b54708;
+  --color-on-danger: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #0d1b46;
+    --color-surface: #1c2951;
+    --color-surface-2: #2a365c;
+    --color-text: #ffffff;
+    --color-text-muted: #bbbfcb;
+    --color-link: #e88e6c;
+    --color-action: #dc5722;
+    --color-on-action: #111111;
+    --color-highlight: #dc5722;
+    --color-on-highlight: #111111;
+    --color-border: #7f869d;
+    --color-divider: #3d496b;
+    --color-focus: #e88e6c;
+    --color-danger: #eb908a;
+    --color-success: #7bb79d;
+    --color-warning: #d89d7d;
+    --color-on-danger: #111111;
+  }
+}
+:root[data-theme="dark"] {
+  --color-bg: #0d1b46;
+  --color-surface: #1c2951;
+  --color-surface-2: #2a365c;
+  --color-text: #ffffff;
+  --color-text-muted: #bbbfcb;
+  --color-link: #e88e6c;
+  --color-action: #dc5722;
+  --color-on-action: #111111;
+  --color-highlight: #dc5722;
+  --color-on-highlight: #111111;
+  --color-border: #7f869d;
+  --color-divider: #3d496b;
+  --color-focus: #e88e6c;
+  --color-danger: #eb908a;
+  --color-success: #7bb79d;
+  --color-warning: #d89d7d;
+  --color-on-danger: #111111;
+}
+/* colours:end */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- type ------------------------------------------------------------------------------------------
+     Font stacks: put your licensed brand faces first (declared with @font-face + font-display: swap). */
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-head: var(--font-body);
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* scale: 1.2 ratio from a 16 px base (rem, so it follows the user's browser text size) */
+  --text-xs: 0.75rem;     /* 12 px: badges, fine print. Never for body copy */
+  --text-sm: 0.875rem;    /* 14 px: helper text, table cells, captions */
+  --text-md: 1rem;        /* 16 px: body, inputs (16 px stops iOS zooming into a focused field) */
+  --text-lg: 1.2rem;      /* 19 px: lead paragraphs, card titles */
+  --text-xl: 1.44rem;     /* 23 px: section headings */
+  --text-2xl: 1.728rem;   /* 28 px: page headings (counts as "large text": 3:1 is the floor, aim for 4.5:1) */
+  --text-3xl: 2.0736rem;  /* 33 px: hero / display */
+  --leading-tight: 1.2;   /* headings */
+  --leading-normal: 1.5;  /* body: at least 1.5 for readability */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --measure: 68ch;        /* comfortable line length for paragraphs */
+
+  /* ---- space: a 4 px grid ---------------------------------------------------------------------------- */
+  --space-0: 0;
+  --space-1: 0.25rem;   /* 4 */
+  --space-2: 0.5rem;    /* 8 */
+  --space-3: 0.75rem;   /* 12 */
+  --space-4: 1rem;      /* 16: the phone side gutter */
+  --space-5: 1.5rem;    /* 24 */
+  --space-6: 2rem;      /* 32 */
+  --space-7: 3rem;      /* 48 */
+  --space-8: 4rem;      /* 64 */
+  --target-min: 2.75rem;  /* 44 px: smallest tap target for buttons, checkboxes with their label, icon buttons */
+
+  /* ---- shape ----------------------------------------------------------------------------------------- */
+  --radius-sm: 4px;     /* inputs, checkboxes, tags */
+  --radius-md: 8px;     /* buttons, cards, toasts */
+  --radius-lg: 16px;    /* dialogs, large panels */
+  --radius-pill: 999px;
+  --border-width: 1px;  /* dividers */
+  --control-border-width: 2px;  /* inputs, selects, checkboxes: their edge is the control, so it must show (3:1) */
+
+  /* ---- elevation: shadows add depth, never meaning (a card still needs its border or surface colour) -- */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+  --shadow-2: 0 4px 12px rgb(0 0 0 / 0.10), 0 2px 4px rgb(0 0 0 / 0.06);
+  --shadow-3: 0 12px 32px rgb(0 0 0 / 0.16), 0 4px 8px rgb(0 0 0 / 0.08);
+
+  /* ---- focus: one ring everywhere, drawn outside the control so it never hides the label ------------- */
+  --focus-width: 3px;
+  --focus-offset: 2px;
+  --focus-ring: var(--focus-width) solid var(--color-focus);
+
+  /* ---- motion: the engine's spring.js presets ---------------------------------------------------------
+     ui     { zeta: 1, omega: 37 } settles in ~0.20 s, uiExit { zeta: 1, omega: 46 } in ~0.16 s. Both are
+     critically damped: no bounce, no overshoot. --ease-spring is that exact curve sampled into CSS linear()
+     (both presets share the shape; only the time differs), so CSS transitions and JS springs match. */
+  --dur-instant: 0ms;
+  --dur-ui: 200ms;        /* enter / open / state change (menus, popovers, toggles, toasts in) */
+  --dur-ui-exit: 160ms;   /* exit / close: ~20% faster than the way in */
+  --dur-hover: 120ms;     /* colour-only feedback (hover, press) */
+  --ease-spring: linear(0, 0.08, 0.238, 0.406, 0.555, 0.675, 0.767, 0.836, 0.885, 0.921, 0.946, 0.963, 0.975, 0.983, 0.989, 0.993, 1);
+  --move-ui: 8px;         /* how far things travel as they enter: small, so it reads as response, not show */
+
+  /* ---- layers ---------------------------------------------------------------------------------------- */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-dialog: 300;
+  --z-toast: 400;
+}
+
+/* Browsers without linear() (Safari before 17.2, Firefox before 112) get the nearest cubic-bezier. */
+@supports not (transition-timing-function: linear(0, 1)) {
+  :root { --ease-spring: cubic-bezier(0.3, 0.4, 0.15, 1); }  /* within 2.2% of the spring */
+}
+
+/* Reduced motion: durations go to zero, so every transition built on the tokens stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-ui: 0ms; --dur-ui-exit: 0ms; --dur-hover: 0ms; --move-ui: 0px; }
+}

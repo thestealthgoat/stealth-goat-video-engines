@@ -1,0 +1,843 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style>
+<script src="spring.js"></script>
+<script type="importmap">{"imports":{"three":"/logo/node_modules/three/build/three.module.js","three/addons/":"/logo/node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+// stage3d — the 3D card engine (items E4 · O4 · P1-P5 · C2 · C3). Driven by engine/stage3d.py.
+// Every frame is a pure function of t (frameAt(t)); every move is a closed-form spring from spring.js.
+// H7 light standard on every scene: a warm key (casts real shadows onto a shadow-catcher floor) + a cool rim, a soft
+// hemisphere fill, and a contact-shadow blob under each object that tightens and darkens as it nears the floor.
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+
+const S = window.Spring, clamp01 = S.clamp01;
+let C, W, H, R, scene, cam, bgScene, bgCam, bgMat, fxScene, fxMat, SC, RIG;
+let COL = {}, PAL = [];
+
+// ---------------------------------------------------------------- springs
+const SETTLE = {};
+function settleOf(p) { return SETTLE[p] ??= S.settle({ preset: p }); }
+// progress of a spring started at `start`; `secs` rescales the preset so it settles in that time; v0 in moves/s
+function sp(t, start, preset = 'snappy', secs, v0 = 0) {
+  const pr = S.PRESETS[preset]; if (!pr) throw new Error('unknown preset ' + preset);
+  const omega = secs ? pr.omega * settleOf(preset) / secs : pr.omega;
+  return S.progress(t, { start, zeta: pr.zeta, omega, v0 });
+}
+const sp01 = (...a) => clamp01(sp(...a));
+// impulse response: a spring kicked at t0 with velocity v0 that returns to rest (squash, recoil, dips)
+function kick(t, t0, v0, preset = 'bouncy', secs) { return t < t0 ? 0 : sp(t, t0, preset, secs, v0) - sp(t, t0, preset, secs, 0); }
+const lerp = (a, b, p) => a + (b - a) * p;
+const h01 = (i) => S.hash01 ? S.hash01(7, i) : ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1;
+
+// ---------------------------------------------------------------- colours, fonts, text
+function col(name, fb = '#ffffff') { return new THREE.Color(COL[name] ?? name ?? fb); }
+function css(name) { return COL[name] ?? name; }
+function luma(hex) { const c = new THREE.Color(hex); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; }
+const FAM = { head: 'Head', body: 'Body', sb: 'BodySB', mono: 'Mono' };
+function font(role, px) { return `${Math.round(px)}px "${FAM[role] ?? role}"`; }
+function fit(cx, s, role, px, maxW) {
+  cx.font = font(role, px); const m = cx.measureText(s).width;
+  if (m > maxW) { px *= maxW / m; cx.font = font(role, px); }
+  return px;
+}
+function caps(s) { return C.headCaps ? String(s).toUpperCase() : String(s); }
+// a canvas texture redrawn on demand: tx.set(...args) calls draw(cx, w, h, ...args)
+function canvasTex(w, h, draw) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const cx = cv.getContext('2d'), tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const o = { cv, cx, tex, w, h, key: null,
+    set(...a) { const k = JSON.stringify(a); if (k === o.key) return o; o.key = k; cx.clearRect(0, 0, w, h); draw(cx, w, h, ...a); tex.needsUpdate = true; return o; } };
+  return o;
+}
+function plane(tx, worldW, opt = {}) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(worldW, worldW * tx.h / tx.w),
+    new THREE.MeshBasicMaterial({ map: tx.tex, transparent: true, depthWrite: opt.depthWrite ?? false, toneMapped: false, side: THREE.DoubleSide }));
+  m.renderOrder = opt.order ?? 2; return m;
+}
+function imageTex(url) {
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('image failed to load')); im.src = url; });
+}
+// an image (screenshot) drawn into a canvas with rounded corners and a hairline border
+// a screenshot cover-cropped (top-left anchored) to an aspect, for a phone screen
+function coverTex(img, aspect, maxW = 900, radius = 0.08) {
+  let sw = img.width, sh = sw / aspect; if (sh > img.height) { sh = img.height; sw = sh * aspect; }
+  const w = Math.min(maxW, Math.round(sw * 2)), h = Math.round(w / aspect), r = radius * w;
+  return canvasTex(w, h, (cx) => { cx.save(); cx.beginPath(); cx.roundRect(0, 0, w, h, r); cx.clip(); cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); cx.drawImage(img, 0, 0, sw, sh, 0, 0, w, h); cx.restore(); }).set();
+}
+function shotTex(img, maxW = 1600, radius = 0.035) {
+  const k = Math.min(1, maxW / img.width), w = Math.round(img.width * k), h = Math.round(img.height * k), r = radius * Math.min(w, h) * 2;
+  return canvasTex(w, h, (cx) => {
+    cx.save(); cx.beginPath(); cx.roundRect(0, 0, w, h, r); cx.clip(); cx.drawImage(img, 0, 0, w, h); cx.restore();
+    cx.lineWidth = Math.max(2, w / 500); cx.strokeStyle = 'rgba(255,255,255,0.35)'; cx.beginPath(); cx.roundRect(1, 1, w - 2, h - 2, r); cx.stroke();
+  }).set();
+}
+
+// ---------------------------------------------------------------- H7 light standard
+function lightRig(span = 12, target = new THREE.Vector3()) {
+  const warm = new THREE.Color(C.light?.warm ?? '#FFD6A8'), cool = new THREE.Color(C.light?.cool ?? '#9EC2FF');
+  const key = new THREE.DirectionalLight(warm, C.light?.key ?? 2.6);
+  key.position.copy(target).add(new THREE.Vector3(-6, 10, 7)); key.target.position.copy(target);
+  key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+  Object.assign(key.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 0.5, far: 60 });
+  key.shadow.bias = -0.0003; key.shadow.normalBias = 0.03; key.shadow.radius = 5;
+  const rim = new THREE.DirectionalLight(cool, C.light?.rim ?? 2.2); rim.position.copy(target).add(new THREE.Vector3(7, 4, -8)); rim.target.position.copy(target);
+  const fill = new THREE.HemisphereLight(cool, warm.clone().multiplyScalar(0.3), 0.4);
+  scene.add(key, key.target, rim, rim.target, fill);
+  return { key, rim, fill, warm, cool };
+}
+function aimRig(target) {                                     // keep the key's shadow box on the action
+  for (const L of [RIG.key, RIG.rim]) {
+    const off = L === RIG.key ? new THREE.Vector3(-6, 10, 7) : new THREE.Vector3(7, 4, -8);
+    L.position.copy(target).add(off); L.target.position.copy(target);
+  }
+}
+let BLOB = null;
+function blobTex() {
+  if (BLOB) return BLOB;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const cx = cv.getContext('2d');
+  const g = cx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.45, '#9a9a9a'); g.addColorStop(1, '#000');
+  cx.fillStyle = g; cx.fillRect(0, 0, 128, 128); BLOB = new THREE.CanvasTexture(cv); return BLOB;
+}
+function shadowFloor(y = 0, size = 120, opacity = 0.34) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.ShadowMaterial({ opacity }));
+  m.rotation.x = -Math.PI / 2; m.position.y = y; m.receiveShadow = true; scene.add(m); return m;
+}
+// contact shadow: tight and dark at the floor, wide and faint as the object rises
+function contact(w, d, y = 0) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: blobTex(), transparent: true, depthWrite: false, opacity: 0.6 }));
+  m.rotation.x = -Math.PI / 2; m.position.y = y + 0.003; m.renderOrder = 1; scene.add(m);
+  m.userData = { w, d, y };
+  m.at = (x, z, height, vis = 1) => {
+    const k = 1 + 0.5 * Math.max(0, height); m.position.set(x, m.userData.y + 0.003, z);
+    m.scale.set(w * k, d * k, 1); m.material.opacity = 0.62 * vis / (1 + 1.6 * Math.max(0, height));
+  };
+  return m;
+}
+function glossy(color, o = {}) {
+  return new THREE.MeshPhysicalMaterial({ color, roughness: o.roughness ?? 0.28, metalness: o.metalness ?? 0.05,
+    clearcoat: o.clearcoat ?? 0.8, clearcoatRoughness: 0.15, ...o.extra });
+}
+function shadowy(obj) { obj.traverse((m) => { if (m.isMesh && !m.material.transparent) { m.castShadow = true; m.receiveShadow = true; } }); return obj; }
+
+// ---------------------------------------------------------------- background + fx passes
+const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }';
+const BG_FRAG = `
+precision highp float; varying vec2 vUv;
+uniform float t, mode, aspect, grain, lift; uniform vec3 c0, c1, c2, c3;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main(){
+  vec2 p = vUv; p.x *= aspect;
+  vec3 col;
+  if (mode < 0.5) {                                  // gradient: dark floor, lit horizon glow, vignette
+    col = mix(c0, c1, smoothstep(0.0, 1.0, vUv.y));
+    col += c2 * 0.18 * exp(-pow((vUv.y - 0.62) * 3.2, 2.0)) * exp(-pow((vUv.x - 0.5) * 1.6, 2.0));
+  } else {                                           // mesh gradient: four colour points drifting
+    vec2 q0 = vec2(0.25 + 0.12 * sin(t * 0.50), 0.30 + 0.10 * cos(t * 0.43)) * vec2(aspect, 1.);
+    vec2 q1 = vec2(0.78 + 0.10 * cos(t * 0.37), 0.28 + 0.12 * sin(t * 0.55)) * vec2(aspect, 1.);
+    vec2 q2 = vec2(0.30 + 0.10 * cos(t * 0.61), 0.80 + 0.08 * sin(t * 0.33)) * vec2(aspect, 1.);
+    vec2 q3 = vec2(0.72 + 0.12 * sin(t * 0.29), 0.76 + 0.10 * cos(t * 0.47)) * vec2(aspect, 1.);
+    float w0 = 1. / pow(distance(p, q0) + 0.08, 2.4), w1 = 1. / pow(distance(p, q1) + 0.08, 2.4);
+    float w2 = 1. / pow(distance(p, q2) + 0.08, 2.4), w3 = 1. / pow(distance(p, q3) + 0.08, 2.4);
+    col = (c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3) / (w0 + w1 + w2 + w3);
+  }
+  float v = distance(vUv, vec2(0.5)); col *= 1.0 - 0.55 * smoothstep(0.35, 0.85, v);
+  col *= lift;                                       // the stage lights come up at the open
+  col += (hash(vUv * 1000. + fract(t * 7.13)) - 0.5) * grain;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+const FX_FRAG = `
+precision highp float; varying vec2 vUv;
+uniform float amt, aspect, spin, spread; uniform vec2 at; uniform vec3 tint;
+void main(){
+  vec2 d = vUv - at; d.x *= aspect; float r = length(d), a = atan(d.y, d.x);
+  float core = exp(-r * r / (0.002 + spread * amt * amt));
+  float rays = pow(0.5 + 0.5 * sin(a * 14. + spin), 6.) * exp(-r * (3.0 - 1.8 * amt));
+  vec3 c = mix(tint, vec3(1.), 0.5) * (core * 1.4 + rays * 0.8) * amt;
+  gl_FragColor = vec4(c, clamp(max(c.r, max(c.g, c.b)), 0., 1.));
+}`;
+function srgbVec(hex) { const c = new THREE.Color(); c.setStyle(hex, THREE.SRGBColorSpace); c.convertLinearToSRGB(); return new THREE.Vector3(c.r, c.g, c.b); }
+function makePasses() {
+  bgCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const bc = C.bgColors ?? [];
+  const dark = new THREE.Color(css('primary')).multiplyScalar(0.35).getStyle(THREE.SRGBColorSpace);
+  bgMat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: BG_FRAG, depthTest: false, depthWrite: false,
+    uniforms: { t: { value: 0 }, lift: { value: 1 }, mode: { value: C.bg === 'mesh' ? 1 : 0 }, aspect: { value: W / H }, grain: { value: 0.012 },
+      c0: { value: srgbVec(bc[0] ?? dark) }, c1: { value: srgbVec(bc[1] ?? css('primary')) },
+      c2: { value: srgbVec(bc[2] ?? css('accent')) }, c3: { value: srgbVec(bc[3] ?? css('primary')) } } });
+  bgScene = new THREE.Scene(); bgScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat));
+  fxMat = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FX_FRAG, transparent: true, depthTest: false, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { amt: { value: 0 }, spread: { value: 0.25 }, aspect: { value: W / H }, spin: { value: 0 }, at: { value: new THREE.Vector2(0.5, 0.5) }, tint: { value: srgbVec(css('accent')) } } });
+  fxScene = new THREE.Scene(); fxScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), fxMat));
+}
+// project a world point to frame fractions (for the burst / glow)
+function toScreen(v) { cam.updateMatrixWorld(); const p = v.clone().project(cam); return new THREE.Vector2((p.x + 1) / 2, (p.y + 1) / 2); }
+
+// ---------------------------------------------------------------- shared props
+function roundedCard(w, h, d, color, r = 0.12) {
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 4, Math.min(r, d / 2, w / 2, h / 2)), glossy(color, { clearcoat: 0.5, roughness: 0.4 }));
+  return shadowy(m);
+}
+function glassCardTex(w, h, draw) {           // frosted glass face: works over any plate and keeps alpha honest
+  return canvasTex(w, h, (cx, cw, ch, ...a) => {
+    const r = 0.09 * Math.min(cw, ch);
+    const g = cx.createLinearGradient(0, 0, cw, ch); g.addColorStop(0, 'rgba(255,255,255,0.30)'); g.addColorStop(1, 'rgba(255,255,255,0.10)');
+    cx.fillStyle = g; cx.beginPath(); cx.roundRect(2, 2, cw - 4, ch - 4, r); cx.fill();
+    const e = cx.createLinearGradient(0, 0, cw, ch); e.addColorStop(0, 'rgba(255,255,255,0.85)'); e.addColorStop(0.5, 'rgba(255,255,255,0.15)'); e.addColorStop(1, 'rgba(255,255,255,0.55)');
+    cx.lineWidth = Math.max(2, cw / 160); cx.strokeStyle = e; cx.beginPath(); cx.roundRect(3, 3, cw - 6, ch - 6, r); cx.stroke();
+    draw(cx, cw, ch, ...a);
+  });
+}
+function textOnCard(cx, cw, ch, lines) {      // lines: [{s, role, size (fraction of ch), color}]
+  let y = ch * 0.18;
+  for (const L of lines) {
+    const px = fit(cx, L.s, L.role ?? 'sb', ch * (L.size ?? 0.2), cw * 0.84);
+    cx.fillStyle = css(L.color ?? 'text'); cx.textBaseline = 'top'; cx.textAlign = 'left';
+    cx.fillText(L.s, cw * 0.08, y); y += px * 1.18 + ch * 0.03;
+  }
+}
+
+// ---------------------------------------------------------------- camera
+function camLook(pos, look, t, drift = 0.05, seed = 1) {
+  const [dx, dy] = S.handheld(t, drift, 0.18, seed);
+  // the opening move (every camera scene): the camera starts pulled back, up and to the side and is already moving
+  // on frame 0 (a launched critically damped spring, no overshoot): the hook's big move, never a still first frame
+  const o = C.openFrom ?? [-3.0, 3.2, 8.0], k = C.noOpen ? 0 : 1 - Math.min(1, sp(t, 0, 'smooth', C.openSecs ?? 1.5, 2.0));
+  pos = pos.clone().add(new THREE.Vector3(o[0] * k, o[1] * k, o[2] * k));
+  cam.position.set(pos.x + dx, pos.y + dy, pos.z);
+  cam.lookAt(look.x + dx * 0.4, look.y + dy * 0.4, look.z);
+}
+// sum-of-springs path: keys [{t, p: Vector3, preset, secs}] → position at t (moves add up, overlapping blends cleanly)
+function path(t, keys) {
+  const out = keys[0].p.clone();
+  for (let i = 1; i < keys.length; i++) {
+    const k = keys[i], pr = sp(t, k.t, k.preset ?? 'smooth', k.secs);
+    out.addScaledVector(k.p.clone().sub(keys[i - 1].p), pr);
+  }
+  return out;
+}
+
+// ================================================================ scenes
+const SCENES = {};
+
+// ---- E4 data scenes: bars, count-up score cards, a point cloud / map. Values come from the data file. The camera
+// never stops: a gentle dolly per section plus hand-held drift, and a smooth travel to the next section.
+SCENES.data = (c) => {
+  const secs = c.data?.sections ?? []; if (!secs.length) throw new Error('data: the data file has no sections');
+  const per = c.per ?? 4.6, gap = 20, out = { dur: per * secs.length + 0.4, update: [], keys: [] };
+  C.noOpen = true;                                    // data has its own opening swoop
+  shadowFloor(0);
+  // a floor grid under the whole run: the camera's travel always reads against it (parallax), and it ties the
+  // sections into one world
+  const fg = canvasTex(2048, 512, (cx, w, h) => {
+    cx.strokeStyle = css('text'); cx.lineWidth = 2;
+    for (let i = 0; i <= 64; i++) { const x = (i / 64) * w; cx.globalAlpha = 0.10; cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, h); cx.stroke(); }
+    for (let j = 0; j <= 16; j++) { const y = (j / 16) * h; cx.globalAlpha = 0.10; cx.beginPath(); cx.moveTo(0, y); cx.lineTo(w, y); cx.stroke(); }
+  }).set();
+  const floorW = gap * (secs.length + 1), fgm = plane(fg, floorW, { order: 0 }); fgm.rotation.x = -Math.PI / 2;
+  fgm.position.set(gap * (secs.length - 1) / 2, 0.005, -2); fgm.scale.y = 1; scene.add(fgm);
+  secs.forEach((s, i) => {
+    const x0 = i * gap, t0 = i ? i * per - 0.1 : 0.0, kind = s.kind ?? 'bars';   // the next section builds as the camera lands
+    const g = new THREE.Group(); g.position.x = x0; scene.add(g);
+    const build = { bars: dataBars, cards: dataCards, points: dataPoints }[kind];
+    if (!build) throw new Error('data: unknown section kind ' + kind);
+    const sec = build(s, g, t0, x0); out.update.push(sec.update);
+    if (s.title) {
+      const tx = canvasTex(1400, 220, (cx, w, h, p) => {
+        cx.globalAlpha = p; fit(cx, caps(s.title), 'head', h * 0.52, w * 0.98); cx.fillStyle = css('text'); cx.textBaseline = 'middle'; cx.fillText(caps(s.title), 0, h * 0.42);
+        if (s.note) { fit(cx, s.note, 'body', h * 0.2, w * 0.98); cx.globalAlpha = 0.75 * p; cx.fillText(s.note, 0, h * 0.86); }
+      });
+      const m = plane(tx, 8.4); m.position.set(x0 + (sec.titleX ?? 0.2), sec.titleY ?? 6.4, sec.titleZ ?? -1.5); scene.add(m);
+      out.update.push((t) => { const p = sp(t, t0, 'snappy', 0.7); tx.set(Math.round(clamp01(p) * 100) / 100); m.position.x = x0 + (sec.titleX ?? 0.2) - 0.8 * (1 - p); });
+    }
+    out.keys.push({ t: i ? i * per - 0.55 : 0, p: new THREE.Vector3(x0, sec.camY ?? 4.2, sec.camZ ?? 15), look: new THREE.Vector3(x0, sec.lookY ?? 2.6, 0), secs: 1.5 });
+    if (!i) out.hit = sec.hit;
+  });
+  // opening: the camera swoops down from high and wide onto the first section (the hook's big move, from frame 0)
+  const k0 = out.keys[0], open = { p: k0.p.clone().add(new THREE.Vector3(-14, 10, 12)), look: k0.look.clone().add(new THREE.Vector3(-5, -1.5, 0)) };
+  const pk = [{ t: 0, p: open.p }, { t: 0, p: k0.p, preset: 'smooth', secs: 1.4 }].concat(out.keys.slice(1).map((k) => ({ t: k.t, p: k.p, secs: k.secs })));
+  const lk = [{ t: 0, p: open.look }, { t: 0, p: k0.look, preset: 'smooth', secs: 1.4 }].concat(out.keys.slice(1).map((k) => ({ t: k.t, p: k.look, secs: k.secs })));
+  out.frame = (t) => {
+    const pos = path(t, pk), look = path(t, lk);
+    // never-still push-in within each section, given back during the travel to the next (continuous: no reset)
+    let dolly = 0;
+    out.keys.forEach((k, i) => { dolly += -1.3 * sp(t, i * per, 'gentle', per); if (i + 1 < out.keys.length) dolly += 1.3 * sp(t, out.keys[i + 1].t, 'smooth', 1.5); });
+    pos.z += dolly + 0.6; pos.x += 0.5 * Math.sin((t / out.dur) * Math.PI);  // slow lateral arc across the piece
+    camLook(pos, look, t, 0.09, 4); aimRig(look);
+    out.update.forEach((u) => u(t));
+  };
+  return out;
+};
+const decOf = (v) => (Number.isInteger(v) ? 0 : Math.min(2, (String(v).split('.')[1] || '').length));   // 4.7 -> 1, 0.35 -> 2
+function fmt(v, s) {
+  const d = s.decimals ?? (Math.abs(s.max ?? v) < 10 && v % 1 ? 1 : 0);
+  return (s.prefix ?? '') + Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + (s.suffix ?? '');
+}
+function dataBars(s, g, t0) {
+  const items = s.items, n = items.length, max = Math.max(1e-9, ...items.map((d) => d.value)), maxH = 5.2;
+  const step = Math.min(1.9, 13 / n), bw = step * 0.62, upd = [];
+  const hi = items.reduce((b, d, i) => (d.value > items[b].value ? i : b), 0);
+  items.forEach((d, i) => {
+    const x = (i - (n - 1) / 2) * step, hFull = Math.max(0.05, (d.value / max) * maxH), st = t0 + 0.35 + 0.11 * i;
+    const color = i === hi ? col('accent') : col('text').lerp(col('primary'), 0.25);
+    const bar = new THREE.Mesh(new RoundedBoxGeometry(bw, 1, bw, 4, bw * 0.12), glossy(color, { clearcoat: 0.6, roughness: 0.32 }));
+    shadowy(bar); g.add(bar);
+    const lab = canvasTex(512, 160, (cx, w, h, v, a) => { cx.globalAlpha = a; fit(cx, v, 'head', h * 0.72, w * 0.96); cx.fillStyle = css(i === hi ? 'accent' : 'text'); cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(v, w / 2, h / 2); });
+    const lm = plane(lab, Math.max(1.4, step * 1.05)); g.add(lm);
+    const name = canvasTex(512, 120, (cx, w, h) => { fit(cx, caps(d.label), 'sb', h * 0.6, w * 0.96); cx.fillStyle = css('text'); cx.globalAlpha = 0.85; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(caps(d.label), w / 2, h / 2); }).set();
+    const nm = plane(name, Math.max(1.3, step * 0.98)); nm.position.set(x, 0.03, bw / 2 + 0.75); nm.rotation.x = -1.05; g.add(nm);
+    upd.push((t) => {
+      const p = sp(t, st, 'snappy', 0.85), h = Math.max(0.001, hFull * Math.max(0, p));
+      bar.scale.y = h; bar.position.set(x, h / 2, 0); bar.visible = p > 0.002;
+      const cnt = sp01(t, st, 'smooth', 1.1);
+      const dec = d.decimals ?? s.decimals ?? decOf(d.value);
+      lab.set(fmt(Math.round(d.value * cnt * 10 ** dec) / 10 ** dec, { ...s, decimals: dec }), Math.round(clamp01(cnt * 3) * 100) / 100);
+      lm.position.set(x, h + 0.55, 0); nm.material.opacity = sp01(t, st - 0.1, 'smooth', 0.5);
+    });
+  });
+  return { update: (t) => upd.forEach((u) => u(t)), hit: t0 + 0.35 + 0.11 * hi + 0.3, titleY: maxH + 1.25, lookY: 3.2, camZ: 16 };
+}
+function dataCards(s, g, t0) {
+  const items = s.items.slice(0, 4), n = items.length, cw = Math.min(3.6, 13 / n), chh = cw * 1.25, upd = [];
+  items.forEach((d, i) => {
+    const x = (i - (n - 1) / 2) * (cw + 0.5), st = t0 + 0.3 + 0.16 * i;
+    const card = roundedCard(cw, chh, 0.16, col('primary').lerp(new THREE.Color(0x000000), 0.15), 0.18); g.add(card);
+    const tx = canvasTex(720, 900, (cx, w, h, v) => {
+      cx.fillStyle = css('accent'); cx.fillRect(w * 0.08, h * 0.12, w * 0.16, h * 0.012);
+      fit(cx, caps(d.label), 'sb', h * 0.07, w * 0.84); cx.fillStyle = css('text'); cx.globalAlpha = 0.8; cx.textBaseline = 'top'; cx.fillText(caps(d.label), w * 0.08, h * 0.17);
+      cx.globalAlpha = 1; fit(cx, v, 'head', h * 0.3, w * 0.84); cx.fillStyle = css('text'); cx.textBaseline = 'alphabetic'; cx.fillText(v, w * 0.08, h * 0.66);
+      if (d.note) { fit(cx, d.note, 'body', h * 0.055, w * 0.84); cx.globalAlpha = 0.7; cx.fillText(d.note, w * 0.08, h * 0.84); }
+    });
+    const face = plane(tx, cw * 0.98, { order: 3 }); face.position.z = 0.085; card.add(face);
+    const sh = contact(cw * 1.1, 1.1);
+    upd.push((t) => {
+      const p = sp(t, st, 'snappy', 0.8), lift = 1.6 + 0.12 * S.handheld(t, 1, 0.3, 10 + i)[1];
+      card.rotation.set(-0.08, lerp(-1.5, -0.12 + 0.08 * (i - (n - 1) / 2), p), 0);
+      card.position.set(x, lift + chh / 2 - 2.2 * (1 - clamp01(p)), 0); card.visible = t >= st;
+      const cnt = sp01(t, st + 0.15, 'smooth', 1.3), dec = d.decimals ?? s.decimals ?? decOf(d.value);
+      tx.set(fmt(Math.round(d.value * cnt * 10 ** dec) / 10 ** dec, { ...s, ...d, decimals: dec }));
+      sh.at(g.position.x + x, 0, lift - 0.1, card.visible ? clamp01(p) : 0);
+    });
+  });
+  return { update: (t) => upd.forEach((u) => u(t)), hit: t0 + 0.6, titleY: 7.2, lookY: 3.4 };
+}
+function dataPoints(s, g, t0) {
+  const pts = s.points ?? [], upd = [];
+  const lats = pts.map((p) => p.lat ?? p.y), lons = pts.map((p) => p.lon ?? p.x);
+  const la0 = Math.min(...lats), la1 = Math.max(...lats), lo0 = Math.min(...lons), lo1 = Math.max(...lons);
+  const sx = 12 / Math.max(1e-6, lo1 - lo0), sz = 6.5 / Math.max(1e-6, la1 - la0), sc = Math.min(sx, sz);
+  const vmax = Math.max(1e-9, ...pts.map((p) => p.value ?? 1));
+  // the map plane: a grid that draws itself on
+  const grid = canvasTex(1600, 1000, (cx, w, h, p) => {
+    cx.strokeStyle = css('text'); cx.lineWidth = 2; cx.globalAlpha = 0.18;
+    for (let i = 0; i <= 16; i++) { const x = (i / 16) * w; cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, h * p); cx.stroke(); }
+    for (let j = 0; j <= 10; j++) { const y = (j / 10) * h; cx.beginPath(); cx.moveTo(0, y); cx.lineTo(w * p, y); cx.stroke(); }
+    cx.globalAlpha = 0.5; cx.lineWidth = 4; cx.strokeRect(2, 2, w - 4, h - 4);
+  });
+  const gm = plane(grid, 15, { order: 1 }); gm.rotation.x = -Math.PI / 2; gm.position.y = 0.01; g.add(gm);
+  const at = (p) => new THREE.Vector3(((p.lon ?? p.x) - (lo0 + lo1) / 2) * sc, 0, -((p.lat ?? p.y) - (la0 + la1) / 2) * sc);
+  const order = pts.map((p, i) => i).sort((a, b) => (at(pts[a]).x - at(pts[b]).x));
+  const top = pts.map((p, i) => i).sort((a, b) => (pts[b].value ?? 0) - (pts[a].value ?? 0)).slice(0, 3);
+  order.forEach((idx, k) => {
+    const p = pts[idx], v = at(p), hFull = 0.3 + 3.2 * ((p.value ?? 1) / vmax), st = t0 + 0.5 + 0.9 * (k / Math.max(1, order.length - 1));
+    const isTop = top.includes(idx), color = isTop ? col('accent') : col('text');
+    const colm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 16), glossy(color, { roughness: 0.3 })); shadowy(colm); g.add(colm);
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 16), new THREE.MeshBasicMaterial({ color, toneMapped: false })); g.add(dot);
+    let lab = null, lm = null;
+    if (isTop && p.label) {
+      lab = canvasTex(640, 150, (cx, w, h, a) => { cx.globalAlpha = a; fit(cx, caps(p.label), 'sb', h * 0.42, w * 0.96); cx.fillStyle = css('text'); cx.textAlign = 'center'; cx.textBaseline = 'top'; cx.fillText(caps(p.label), w / 2, 0); if (p.value != null) { fit(cx, fmt(p.value, s), 'head', h * 0.46, w * 0.96); cx.fillStyle = css('accent'); cx.fillText(fmt(p.value, s), w / 2, h * 0.5); } });
+      lm = plane(lab, 2.6); g.add(lm);
+    }
+    upd.push((t) => {
+      const pr = sp(t, st, 'snappy', 0.7), h = Math.max(0.001, hFull * Math.max(0, pr));
+      colm.scale.y = h; colm.position.set(v.x, h / 2, v.z); colm.visible = dot.visible = t >= st;
+      dot.position.set(v.x, h, v.z); dot.scale.setScalar(1 + 0.6 * kick(t, st + 0.25, 4, 'snappy'));
+      if (lm) { lab.set(Math.round(sp01(t, st + 0.2, 'smooth', 0.5) * 100) / 100); lm.position.set(v.x, h + 0.9, v.z); lm.quaternion.copy(cam.quaternion); }
+    });
+  });
+  // the point cloud: a slow-turning field of specks over the map
+  const N = s.cloud ?? 900, pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) { pos[3 * i] = (h01(i * 3) - 0.5) * 16; pos[3 * i + 1] = 0.3 + h01(i * 3 + 1) * 6; pos[3 * i + 2] = (h01(i * 3 + 2) - 0.5) * 9; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const cloud = new THREE.Points(geo, new THREE.PointsMaterial({ color: col('text'), size: 0.045, transparent: true, opacity: 0, depthWrite: false })); g.add(cloud);
+  upd.push((t) => { grid.set(Math.round(sp01(t, t0, 'smooth', 0.9) * 50) / 50); cloud.rotation.y = 0.04 * (t - t0); cloud.material.opacity = 0.55 * sp01(t, t0 + 0.2, 'smooth', 1); });
+  return { update: (t) => upd.forEach((u) => u(t)), hit: t0 + 1.0, titleX: -3.4, titleY: 1.3, titleZ: -4.9, camY: 8.5, camZ: 12.5, lookY: 0.9 };
+}
+
+// ---- O4 orbiting glass cards around a presenter. Rendered as two alpha layers (cards behind / in front of the
+// orbit's centre); stage3d.py stacks plate → back cards → the O2 matte cut-out → front cards. The camera is the
+// plate's camera, so it stays locked.
+SCENES.orbit = (c) => {
+  const labels = c.cards ?? ['Card one', 'Card two', 'Card three'], n = labels.length;
+  const ctr = c.centre ?? [0.5, 0.42], rx = c.rx ?? 0.36, ry = c.ry ?? 0.06, period = c.period ?? 9, tilt = c.tilt ?? 0.12;
+  const dist = 10, vh = 2 * dist * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), vw = vh * W / H;
+  cam.position.set(0, 0, dist); cam.lookAt(0, 0, 0);
+  const O = new THREE.Vector3((ctr[0] - 0.5) * vw, (0.5 - ctr[1]) * vh, 0), RX = rx * vw, RZ = RX * 0.55;
+  const cards = labels.map((s, i) => {
+    const tx = glassCardTex(760, 300, (cx, w, h) => {
+      cx.fillStyle = css('accent'); cx.beginPath(); cx.arc(h * 0.3, h * 0.5, h * 0.11, 0, 7); cx.fill();
+      const px = fit(cx, s, 'sb', h * 0.3, w - h * 0.62); cx.fillStyle = '#ffffff'; cx.textBaseline = 'middle'; cx.fillText(s, h * 0.5, h * 0.52);
+    }).set();
+    const m = plane(tx, vw * 0.17); scene.add(m); return { m, ph: (i / n) * Math.PI * 2 };
+  });
+  return { dur: c.dur ?? 8, frame: (t, layer) => {
+    const turn = (2 * Math.PI * t) / period;
+    cards.forEach((k, i) => {
+      // entrance: each card flies in from just in front of the lens (huge, past the camera) to its place in the orbit
+      const inP = sp(t, 0.0 + 0.14 * i, 'snappy', 0.9), q = Math.min(1, inP), a = k.ph + turn;
+      const ox = O.x + RX * Math.sin(a), oz = O.z + RZ * Math.cos(a), oy = O.y + ry * vh * Math.sin(a + 0.6) + tilt * vh * Math.cos(a) * 0.3;
+      const sx = (i % 2 ? 1 : -1) * 0.6, sz = dist - 1.2;
+      const x = sx + (ox - sx) * q, z = sz + (oz - sz) * q, y = oy * q;
+      const outP = c.exit === false ? 0 : sp01(t, (c.dur ?? 8) - 0.75 + 0.08 * i, 'uiExit', 0.4);
+      const sc = Math.max(0.001, (1 - outP)) * (t < 0.14 * i ? 0 : 1);
+      k.m.position.set(x, y, z); k.m.scale.setScalar(sc); k.m.rotation.y = 0.35 * Math.sin(a);
+      const front = z >= O.z;
+      k.m.visible = sc > 0.002 && (layer === 'all' || (layer === 'front') === front);
+      k.m.material.opacity = clamp01(inP * 1.5) * (0.82 + 0.18 * Math.cos(a));
+    });
+  } };
+};
+
+// ---- P1 3D card stack of real screenshots: drop in, fan out in depth, the hero card lifts to camera.
+SCENES.stack = async (c) => {
+  const imgs = await Promise.all((c.shots ?? []).map(imageTex)); if (!imgs.length) throw new Error('stack: no screenshots');
+  shadowFloor(-0.01);
+  const n = imgs.length, cw = 6.4, upd = [], hero = c.hero ?? 0;
+  imgs.forEach((im, i) => {
+    const tx = shotTex(im), ch = cw * tx.h / tx.w;
+    const g = new THREE.Group(); scene.add(g);
+    const back = roundedCard(cw, ch, 0.06, col('primary').multiplyScalar(0.6), 0.2); g.add(back);
+    const face = plane(tx, cw * 0.995, { order: 3 }); face.position.z = 0.035; g.add(face);
+    const sh = contact(cw * 0.9, ch * 0.55);
+    const st = 0.1 + 0.2 * i, d = i - (n - 1) / 2;
+    upd.push((t) => {
+      const drop = sp(t, st, 'snappy', 0.75), fan = sp(t, 1.7, 'smooth', 1.0), lift = i === hero ? sp(t, 3.1, 'snappy', 0.8) : 0, push = i === hero ? 0 : sp01(t, 3.1, 'smooth', 0.9);
+      const y = ch / 2 + 0.6 + 0.35 * i * (1 - fan) + 4.5 * (1 - clamp01(drop)) + 0.08 * S.handheld(t, 1, 0.25, 20 + i)[1];
+      g.position.set(d * 4.4 * fan + lift * (-d * 4.4), y + lift * 0.4, -0.5 * i * (1 - fan) - Math.abs(d) * 1.2 * fan + lift * 2.6 - push * 0.8);
+      g.rotation.set(-0.12 * (1 - lift), (-0.45 + 0.9 * (i / Math.max(1, n - 1))) * fan * (1 - lift) + 0.4 * (1 - fan), 0.03 * d * (1 - fan));
+      g.visible = t >= st;
+      sh.at(g.position.x, g.position.z, 0.4 + 0.25 * lift, g.visible ? clamp01(drop) : 0);
+    });
+  });
+  return { dur: c.dur ?? 6, hit: 3.3, frame: (t) => {
+    const pos = new THREE.Vector3(2.6 * Math.sin(0.25 + 0.12 * t), 4.4 - 0.25 * sp(t, 0, 'gentle', 6), 13 - 1.4 * sp(t, 0, 'gentle', 6));
+    camLook(pos, new THREE.Vector3(0, 2.6, 0), t, 0.08, 6); upd.forEach((u) => u(t));
+  } };
+};
+
+// ---- P2 mesh gradient + light-burst transitions: the mesh background drifts; title cards swap behind light bursts.
+SCENES.burst = (c) => {
+  const lines = c.lines ?? ['One', 'Two', 'Three'], per = c.per ?? 1.8, upd = [];
+  C.bg = 'mesh'; bgMat.uniforms.mode.value = 1;
+  const pal = [css('primary'), css('accent'), C.palette?.[2] ?? css('text'), C.palette?.[3] ?? css('primary')];
+  bgMat.uniforms.c0.value = srgbVec(new THREE.Color(pal[0]).multiplyScalar(0.55).getStyle(THREE.SRGBColorSpace));
+  bgMat.uniforms.c1.value = srgbVec(pal[0]); bgMat.uniforms.c2.value = srgbVec(pal[1]); bgMat.uniforms.c3.value = srgbVec(pal[3]);
+  cam.position.set(0, 0, 12); cam.lookAt(0, 0, 0);
+  const bursts = lines.map((s, i) => i * per + 0.25);
+  lines.forEach((s, i) => {
+    const tx = canvasTex(1800, 360, (cx, w, h) => { fit(cx, caps(s), 'head', h * 0.62, w * 0.96); cx.fillStyle = css('text'); cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(caps(s), w / 2, h / 2); }).set();
+    const m = plane(tx, 11); scene.add(m);
+    const tin = bursts[i] + 0.06, tout = i < lines.length - 1 ? bursts[i + 1] - 0.02 : 1e9;
+    upd.push((t) => {
+      const p = sp(t, tin, 'snappy', 0.6), o = t >= tout ? 1 : 0;
+      m.visible = t >= tin && !o; m.scale.setScalar(0.86 + 0.14 * p + 0.03 * sp(t, tin, 'gentle', per));
+      m.position.z = -1.5 * (1 - clamp01(p)); m.material.opacity = clamp01(p * 1.4);
+    });
+  });
+  const dur = c.dur ?? lines.length * per + 0.5;
+  return { dur, cuts: bursts.map((b) => b + 0.06), hit: bursts[0] + 0.06, frame: (t) => {
+    camLook(new THREE.Vector3(0, 0, 12 - 0.8 * sp(t, 0, 'gentle', dur)), new THREE.Vector3(0, 0, 0), t, 0.06, 2);
+    let amt = 0; for (const b of bursts) amt = Math.max(amt, (t >= b - 0.12 ? sp01(t, b - 0.12, 'ui', 0.12) : 0) * (1 - sp01(t, b + 0.05, 'smooth', 0.45)));
+    FX.amt = amt; FX.at = [0.5, 0.5]; FX.spin = t * 1.2;
+    upd.forEach((u) => u(t));
+  } };
+};
+
+// ---- P3 badge clash (two badges fly in and collide: the piece's one slam) and toggle switches (UI springs).
+SCENES.badge = (c) => {
+  shadowFloor(0); const a = c.text1 ?? 'Before', b = c.text2 ?? 'After', HIT = 1.0, upd = [];
+  const mk = (s, color, ink) => {
+    const g = new THREE.Group(); const body = new THREE.Mesh(new RoundedBoxGeometry(4.6, 1.7, 0.55, 6, 0.27), glossy(color)); shadowy(body); g.add(body);
+    const tx = canvasTex(1000, 360, (cx, w, h) => { fit(cx, caps(s), 'head', h * 0.56, w * 0.86); cx.fillStyle = ink; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(caps(s), w / 2, h * 0.53); }).set();
+    const f = plane(tx, 4.4, { order: 3 }); f.position.z = 0.28; g.add(f); scene.add(g); return g;
+  };
+  const inkOn = (hex) => (luma(hex) > 0.5 ? '#111111' : '#ffffff');
+  const A = mk(a, col('primary'), inkOn(css('primary'))), B = mk(b, col('accent'), inkOn(css('accent')));
+  const sa = contact(4.8, 1.4), sb = contact(4.8, 1.4);
+  // sparks at the collision
+  const N = 160, pos = new Float32Array(N * 3), geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const sparks = new THREE.Points(geo, new THREE.PointsMaterial({ color: col('accent').lerp(new THREE.Color(0xffffff), 0.5), size: 0.09, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  scene.add(sparks);
+  const vel = Array.from({ length: N }, (_, i) => { const th = h01(i) * Math.PI * 2, ph = (h01(i + 300) - 0.5) * 1.6, v = 3 + 6 * h01(i + 600); return [Math.cos(th) * Math.cos(ph) * v, Math.abs(Math.sin(th)) * v * 0.9 + 1.5, Math.sin(ph) * v]; });
+  const sep = 2.45, from = 11.5;
+  upd.push((t) => {
+    // approach: a launched spring that would land at the centre (the badges meet at HIT), then a slam recoil
+    const appr = t < HIT ? Math.min(1, sp(t, 0, 'smooth', 1.15 * HIT, 0.8)) : 1;   // in from off-frame from frame 0, still moving at the clash
+    const rec = t < HIT ? 0 : kick(t, HIT, 7, 'slam');
+    const xa = -(sep + (from - sep) * (1 - Math.min(1, appr))) - 0.9 * rec, xb = -xa;
+    const y = 1.3 + 0.2 * Math.max(0, 1 - appr);
+    A.position.set(xa, y, 0); B.position.set(xb, y, 0);
+    A.rotation.set(0, 0.32 * (1 - appr) + 0.08, -0.25 * rec); B.rotation.set(0, -0.32 * (1 - appr) - 0.08, 0.25 * rec);
+    A.visible = B.visible = true;
+    sa.at(xa, 0, y - 0.85, A.visible ? 1 : 0); sb.at(xb, 0, y - 0.85, B.visible ? 1 : 0);
+    const dt = t - HIT; sparks.visible = dt > 0 && dt < 1.4;
+    if (sparks.visible) {
+      for (let i = 0; i < N; i++) { const v = vel[i], d = 1 - Math.exp(-2.2 * dt); pos[3 * i] = v[0] * d / 2.2; pos[3 * i + 1] = 1.3 + v[1] * d / 2.2 - 4.9 * dt * dt * 0.5; pos[3 * i + 2] = v[2] * d / 2.2; }
+      geo.attributes.position.needsUpdate = true; sparks.material.opacity = 1 - clamp01(dt / 1.2);
+    }
+  });
+  const dur = c.dur ?? 3.2;
+  return { dur, hit: HIT, frame: (t) => {
+    const shk = S.shake(t, HIT, 0.16, 7, 11), shk2 = S.shake(t, HIT, 0.1, 7, 15.1);
+    camLook(new THREE.Vector3(0.6 * Math.sin(0.3 * t) + shk, 3.2 + shk2, 12.5 - 1.2 * sp(t, 0, 'gentle', dur)), new THREE.Vector3(0, 1.3, 0), t, 0.06, 3);
+    FX.amt = t >= HIT ? (1 - sp01(t, HIT, 'smooth', 0.5)) * 0.9 : 0; FX.spread = 0.04; FX.at = [toScreen(new THREE.Vector3(0, 1.3, 0)).x, toScreen(new THREE.Vector3(0, 1.3, 0)).y]; FX.spin = t;
+    upd.forEach((u) => u(t));
+  } };
+};
+SCENES.toggle = (c) => {
+  shadowFloor(0); const labels = c.labels ?? ['Notifications', 'Dark mode', 'Auto-save'], n = labels.length, upd = [];
+  const panel = roundedCard(9.6, 1.9 * n + 0.8, 0.22, col('primary').multiplyScalar(0.8), 0.3); scene.add(panel);
+  const ph = 1.9 * n + 0.8; panel.position.set(0, ph / 2 + 0.6, 0); panel.rotation.x = -0.12;
+  const off = new THREE.Color('#5b6168'), on = col('accent');
+  labels.forEach((s, i) => {
+    const y = ph / 2 - 0.4 - 1.9 * (i + 0.5);
+    const tx = canvasTex(1000, 200, (cx, w, h) => { fit(cx, s, 'sb', h * 0.42, w * 0.96); cx.fillStyle = css('text'); cx.textBaseline = 'middle'; cx.fillText(s, 0, h / 2); }).set();
+    const lm = plane(tx, 5); lm.position.set(-1.6, y, 0.13); panel.add(lm);
+    const trackMat = glossy(off.clone(), { clearcoat: 0.9, roughness: 0.2 });
+    const track = new THREE.Mesh(new RoundedBoxGeometry(2.3, 1.1, 0.5, 6, 0.25), trackMat); track.position.set(2.9, y, 0.25); shadowy(track); panel.add(track);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.42, 48, 32), glossy(new THREE.Color('#f4f4f4'), { clearcoat: 1, roughness: 0.15 })); knob.castShadow = true; panel.add(knob);
+    const flips = (c.flips ?? [0.8, 2.4, 3.0]).map((f) => f + 0.22 * i);
+    upd.push((t) => {
+      let p = 0;                                               // on, off, on...: each flip adds or takes away one move
+      flips.forEach((f, k) => { p += (k % 2 ? -1 : 1) * sp(t, f, 'ui'); });
+      knob.position.set(2.9 + lerp(-0.6, 0.6, p), y, 0.62 + 0.12 * Math.sin(Math.PI * clamp01(p)));
+      trackMat.color.copy(off).lerp(on, clamp01(p));
+      trackMat.emissive.copy(on).multiplyScalar(0.25 * clamp01(p));
+    });
+  });
+  const dur = c.dur ?? 4.2;
+  return { dur, hit: 0.8, frame: (t) => {
+    panel.position.y = ph / 2 + 0.6 + 0.06 * S.handheld(t, 1, 0.3, 9)[1];
+    camLook(new THREE.Vector3(-2.2 + 1.2 * sp(t, 0, 'gentle', dur), 4.8, 13.5 - 1.5 * sp(t, 0, 'gentle', dur)), new THREE.Vector3(0, ph / 2 + 0.4, 0), t, 0.07, 5);
+    upd.forEach((u) => u(t));
+  } };
+};
+
+// ---- P4 glossy icon props built from simple 3D shapes (extruded icon outlines with deep bevels, clearcoat).
+const ICONS = {
+  check: () => { const s = new THREE.Shape(); s.moveTo(-1, 0.05); s.lineTo(-0.35, -0.6); s.lineTo(1, 0.75); s.lineTo(0.72, 1.0); s.lineTo(-0.35, -0.08); s.lineTo(-0.72, 0.36); s.closePath(); return s; },
+  plus: () => { const a = 0.32, b = 1; const s = new THREE.Shape(); s.moveTo(-a, b); s.lineTo(a, b); s.lineTo(a, a); s.lineTo(b, a); s.lineTo(b, -a); s.lineTo(a, -a); s.lineTo(a, -b); s.lineTo(-a, -b); s.lineTo(-a, -a); s.lineTo(-b, -a); s.lineTo(-b, a); s.lineTo(-a, a); s.closePath(); return s; },
+  star: () => { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.45 : 1.05, a = Math.PI / 2 + i * Math.PI / 5; (i ? s.lineTo : s.moveTo).call(s, r * Math.cos(a), r * Math.sin(a)); } s.closePath(); return s; },
+  heart: () => { const s = new THREE.Shape(); s.moveTo(0, -0.95); s.bezierCurveTo(-0.4, -0.55, -1.1, -0.1, -1.0, 0.4); s.bezierCurveTo(-0.9, 0.95, -0.2, 1.05, 0, 0.55); s.bezierCurveTo(0.2, 1.05, 0.9, 0.95, 1.0, 0.4); s.bezierCurveTo(1.1, -0.1, 0.4, -0.55, 0, -0.95); return s; },
+  play: () => { const s = new THREE.Shape(); s.moveTo(-0.7, -0.95); s.lineTo(1.0, 0); s.lineTo(-0.7, 0.95); s.closePath(); return s; },
+  bolt: () => { const s = new THREE.Shape(); s.moveTo(0.25, 1.05); s.lineTo(-0.75, -0.1); s.lineTo(-0.05, -0.1); s.lineTo(-0.3, -1.05); s.lineTo(0.75, 0.15); s.lineTo(0.05, 0.15); s.closePath(); return s; },
+  pin: () => { const s = new THREE.Shape(); s.moveTo(0, -1.05); s.bezierCurveTo(-0.3, -0.5, -0.8, 0, -0.8, 0.35); s.absarc(0, 0.35, 0.8, Math.PI, 0, true); s.bezierCurveTo(0.8, 0, 0.3, -0.5, 0, -1.05); const h = new THREE.Path(); h.absarc(0, 0.38, 0.3, 0, Math.PI * 2, false); s.holes.push(h); return s; },
+  chat: () => { const s = new THREE.Shape(); s.moveTo(-1, 0.55); s.quadraticCurveTo(-1, 0.95, -0.6, 0.95); s.lineTo(0.6, 0.95); s.quadraticCurveTo(1, 0.95, 1, 0.55); s.lineTo(1, -0.15); s.quadraticCurveTo(1, -0.55, 0.6, -0.55); s.lineTo(-0.2, -0.55); s.lineTo(-0.65, -1.0); s.lineTo(-0.6, -0.55); s.quadraticCurveTo(-1, -0.55, -1, -0.15); s.closePath(); return s; },
+};
+function iconMesh(name, color) {
+  const f = ICONS[name]; if (!f) throw new Error('props: unknown icon ' + name + ' (have ' + Object.keys(ICONS).join(', ') + ')');
+  const geo = new THREE.ExtrudeGeometry(f(), { depth: 0.38, bevelEnabled: true, bevelThickness: 0.16, bevelSize: 0.12, bevelSegments: 8, curveSegments: 32 });
+  geo.center(); return shadowy(new THREE.Mesh(geo, glossy(color, { clearcoat: 1, roughness: 0.18 })));
+}
+SCENES.props = (c) => {
+  shadowFloor(0); const names = c.icons ?? ['check', 'star', 'heart', 'bolt', 'play'], n = names.length, upd = [];
+  const pal = C.palette?.length ? C.palette : [css('accent'), css('primary'), css('text')];
+  names.forEach((nm, i) => {
+    const m = iconMesh(nm, new THREE.Color(pal[i % pal.length])); scene.add(m);
+    const x = (i - (n - 1) / 2) * Math.min(2.6, 11 / Math.max(1, n - 1)), st = 0.0 + 0.12 * i, sh = contact(2.2, 1.3);
+    upd.push((t) => {
+      const p = sp(t, st, 'snappy', 0.7), [bx, by] = S.handheld(t, 1, 0.35, 30 + i);
+      const y = 1.8 + 0.22 * by + 3.5 * (1 - clamp01(p));
+      m.position.set(x, y, 0); m.scale.setScalar(Math.max(0.001, p) * (1 + 0.12 * kick(t, st + 0.3, 3, 'snappy')));
+      m.rotation.set(0.12 * by, -0.5 + 0.5 * clamp01(p) + 0.35 * bx + 0.15 * Math.sin(0.6 * t + i), 0.05 * bx);
+      m.visible = t >= st; sh.at(x, 0, y - 1.05, m.visible ? clamp01(p) : 0);
+    });
+  });
+  const dur = c.dur ?? 4.5;
+  return { dur, hit: 0.12 * (n - 1) + 0.3, frame: (t) => {
+    camLook(new THREE.Vector3(1.0 * Math.sin(0.35 * t), 4.0, 15 - 1.0 * sp(t, 0, 'gentle', dur)), new THREE.Vector3(0, 1.7, 0), t, 0.06, 8);
+    upd.forEach((u) => u(t));
+  } };
+};
+
+// ---- P5 brand-glow product reveal: glow → phone → panels → toast → tagline (E1 caption style, word by word).
+SCENES.reveal = async (c) => {
+  const imgs = await Promise.all((c.shots ?? []).map(imageTex)); shadowFloor(0);
+  const upd = [], T = { glow: 0.15, phone: 0.75, panels: 2.0, toast: 3.2, tag: 4.0 };
+  // phone
+  const PW = 2.5, PH = 5.1, phone = new THREE.Group(); scene.add(phone);
+  const body = new THREE.Mesh(new RoundedBoxGeometry(PW, PH, 0.28, 8, 0.34), glossy(new THREE.Color('#15171a'), { metalness: 0.6, roughness: 0.3, clearcoat: 1 })); shadowy(body); phone.add(body);
+  if (imgs[0]) {
+    const sw = PW * 0.9, shh = PH * 0.93, st = coverTex(imgs[0], sw / shh);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw, shh), new THREE.MeshBasicMaterial({ map: st.tex, toneMapped: false })); scr.position.z = 0.145; phone.add(scr);
+  }
+  const psh = contact(PW * 1.3, 1.2);
+  upd.push((t) => {
+    const p = sp(t, T.phone, 'snappy', 0.9);
+    phone.position.set(0, PH / 2 + 0.5 - 3.5 * (1 - clamp01(p)) + 0.06 * S.handheld(t, 1, 0.3, 40)[1], 0);
+    phone.rotation.set(-0.06, lerp(-0.9, 0.18, p) + 0.06 * Math.sin(0.4 * t), 0); phone.scale.setScalar(Math.max(0.001, 0.6 + 0.4 * p)); phone.visible = t >= T.phone;
+    psh.at(0, 0, 0.5 + 3.5 * (1 - clamp01(p)), phone.visible ? clamp01(p) : 0);
+  });
+  // panels (screenshots 2.., or text cards)
+  const pan = (c.panels ?? []).length ? c.panels : imgs.slice(1).map(() => null);
+  const sides = [-1, 1, -1, 1];
+  pan.slice(0, 4).forEach((txt, i) => {
+    let tx; if (imgs[i + 1]) tx = shotTex(imgs[i + 1], 900);
+    else tx = glassCardTex(800, 460, (cx, w, h) => textOnCard(cx, w, h, [{ s: txt, role: 'sb', size: 0.16 }])).set();
+    const pw = 3.4, m = plane(tx, pw, { order: 3 }); scene.add(m);
+    const sd = sides[i], row = Math.floor(i / 2), st = T.panels + 0.22 * i;
+    upd.push((t) => {
+      const p = sp(t, st, 'snappy', 0.8);
+      m.position.set(sd * lerp(0.4, 3.4, p), 3.9 - 2.1 * row + 0.05 * S.handheld(t, 1, 0.3, 50 + i)[1], lerp(-0.6, 0.25, clamp01(p)));
+      m.rotation.y = -sd * 0.38 * clamp01(p); m.scale.setScalar(Math.max(0.001, 0.5 + 0.5 * p)); m.visible = t >= st; m.material.opacity = clamp01(p * 1.6);
+    });
+  });
+  // toast
+  const toast = c.toast ?? 'New update';
+  const ttx = canvasTex(900, 200, (cx, w, h) => {
+    cx.fillStyle = 'rgba(255,255,255,0.94)'; cx.beginPath(); cx.roundRect(4, 4, w - 8, h - 8, h * 0.3); cx.fill();
+    cx.fillStyle = css('accent'); cx.beginPath(); cx.roundRect(h * 0.2, h * 0.2, h * 0.6, h * 0.6, h * 0.16); cx.fill();
+    fit(cx, toast, 'sb', h * 0.32, w - h * 1.3); cx.fillStyle = '#16181b'; cx.textBaseline = 'middle'; cx.fillText(toast, h * 1.0, h * 0.52);
+  }).set();
+  const tm = plane(ttx, 3.0, { order: 4 }); scene.add(tm);
+  upd.push((t) => { const p = sp(t, T.toast, 'ui'); tm.position.set(0, PH + 0.3 + 0.9 * (1 - p), 0.6); tm.material.opacity = clamp01(p * 1.4); tm.visible = t >= T.toast; tm.scale.setScalar(0.85 + 0.15 * p); });
+  // tagline, E1 caption style: head font, word by word, the newest word in the accent colour
+  const words = String(c.tagline ?? c.text1 ?? '').split(/\s+/).filter(Boolean);
+  if (words.length) {
+    const tg = canvasTex(2000, 260, (cx, w, h, k, last) => {
+      cx.font = font('head', h * 0.56); const ws = words.map((s) => caps(s)), sp_ = cx.measureText(' ').width;
+      let tot = ws.reduce((a, s) => a + cx.measureText(s).width, 0) + sp_ * (ws.length - 1); let px = h * 0.56;
+      if (tot > w * 0.96) { px *= w * 0.96 / tot; cx.font = font('head', px); tot = w * 0.96; }
+      let x = (w - tot) / 2; cx.textBaseline = 'middle';
+      ws.forEach((s, j) => { const ww = cx.measureText(s).width; if (j < k) { cx.fillStyle = j === k - 1 && last < 1 ? css('accent') : css('text'); cx.fillText(s, x, h / 2); } x += ww + cx.measureText(' ').width; });
+    });
+    const gm = plane(tg, 7.2, { order: 4 }); gm.position.set(0, 0.55, 2.2); gm.rotation.x = -0.2; scene.add(gm);
+    upd.push((t) => { const k = words.filter((_, j) => t >= T.tag + 0.16 * j).length; tg.set(k, k ? Math.round(sp01(t, T.tag + 0.16 * (k - 1) + 0.25, 'smooth', 0.3) * 4) / 4 : 0); gm.visible = k > 0; gm.position.y = 0.55 + 0.06 * (1 - sp01(t, T.tag, 'snappy')); });
+  }
+  const dur = c.dur ?? 6.5;
+  return { dur, hit: T.phone + 0.35, frame: (t) => {
+    const gp = sp01(t, T.glow, 'smooth', 0.8) * (1 - 0.85 * sp01(t, T.phone + 0.1, 'smooth', 0.9));
+    camLook(new THREE.Vector3(0.8 * Math.sin(0.25 * t), 3.6, 14.5 - 2.2 * sp(t, 0, 'gentle', dur)), new THREE.Vector3(0, 2.7, 0), t, 0.07, 11);
+    FX.amt = gp; FX.spread = 0.025; FX.behind = true; const sc = toScreen(new THREE.Vector3(0, 2.8, 0)); FX.at = [sc.x, sc.y]; FX.spin = 0.6 * t;
+    upd.forEach((u) => u(t));
+  } };
+};
+
+// ---- C2 mascot hop world: the mascot hops platform to platform on word times; each platform's word lights on landing.
+SCENES.hop = async (c) => {
+  const words = c.words ?? [], times = c.times ?? words.map((_, i) => 0.6 + 0.55 * i); if (!words.length) throw new Error('hop: no words');
+  const upd = [], plats = [], step = 3.3;
+  shadowFloor(-2.2, 200, 0.22);
+  words.forEach((s, i) => {
+    const w = Math.max(2.2, 0.55 * s.length + 1.0), x = i * step + (i ? 0 : 0), y = [0, 0.5, 0.15, 0.7, 0.3][i % 5], z = (h01(i * 5) - 0.5) * 0.8;
+    const pm = new THREE.Mesh(new RoundedBoxGeometry(w * 0.9, 0.8, 1.8, 5, 0.18), glossy(col('primary').lerp(new THREE.Color(0xffffff), 0.12), { clearcoat: 0.6, roughness: 0.35 })); shadowy(pm); scene.add(pm);
+    const tx = canvasTex(900, 220, (cx, cw, ch, lit) => { fit(cx, s, 'head', ch * 0.7, cw * 0.96); cx.fillStyle = lit > 0.5 ? css('accent') : css('text'); cx.globalAlpha = 0.45 + 0.55 * lit; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(s, cw / 2, ch / 2); });
+    const lm = plane(tx, Math.min(w * 0.85, 2.6), { order: 3 }); scene.add(lm);
+    plats.push({ x, y, z, w, pm, lm, tx });
+  });
+  // mascot: the --character image as a billboard, else a placeholder bean (capsule + eyes) in the accent colour
+  let mascot, mh = 1.3;
+  if (c.character) {
+    const im = await imageTex(c.character), tx = canvasTex(im.width, im.height, (cx) => cx.drawImage(im, 0, 0)).set(); mh = 1.6;
+    mascot = new THREE.Mesh(new THREE.PlaneGeometry(mh * im.width / im.height, mh), new THREE.MeshBasicMaterial({ map: tx.tex, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }));
+    mascot.castShadow = true; mascot.geometry.translate(0, mh / 2, 0);
+  } else {
+    mascot = new THREE.Group();
+    const bean = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.55, 8, 24), glossy(col('accent'), { clearcoat: 1, roughness: 0.25 })); bean.position.y = 0.7; bean.castShadow = true; mascot.add(bean);
+    for (const sx of [-0.15, 0.15]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), new THREE.MeshBasicMaterial({ color: 0x111111 })); e.position.set(sx, 0.95, 0.38); mascot.add(e); }
+  }
+  scene.add(mascot); const msh = contact(1.0, 0.7);
+  const HOP = 0.42;                                           // flight time of a hop (landing = the word time)
+  const fl = (i) => (i > 0 ? Math.min(HOP, 0.85 * Math.max(0.05, times[i] - times[i - 1])) : HOP);   // never longer than the gap
+  const top = (i) => plats[i].y + 0.4;
+  upd.push((t) => {
+    // which hop are we in?
+    let i = 0; while (i + 1 < plats.length && t >= times[i + 1] - fl(i + 1)) i++;
+    let x, y, z, sq = 0;
+    const land = times[i];
+    if (i > 0 && t < land) {                                  // in flight from i-1 to i
+      const u = clamp01((t - (land - fl(i))) / fl(i)), a = plats[i - 1], b = plats[i];
+      x = lerp(a.x, b.x, u); z = lerp(a.z, b.z, u);
+      const apex = 1.5 + Math.max(top(i - 1), top(i));
+      y = lerp(top(i - 1), top(i), u) + 4 * (apex - Math.max(top(i - 1), top(i))) * u * (1 - u) * 0.75;
+      sq = -0.12 * Math.sin(Math.PI * u);                     // stretch in the air
+    } else {
+      const p = plats[i]; x = p.x; z = p.z; y = top(i);
+      if (i === 0 && t < land) { const fi = Math.min(0.45, land); y += 3 * (1 - sp01(t, land - fi, 'smooth', fi)); }
+      sq = 0.28 * kick(t, land, -6, 'bouncy', 0.6) * -1;      // landing squash
+      if (i === plats.length - 1) {                          // the ending: one happy hop in place, then it lands
+        const e0 = land + 0.5, e1 = e0 + 0.38, u = clamp01((t - e0) / (e1 - e0));
+        if (t > e0 && t < e1) { y += 0.9 * 4 * u * (1 - u); sq = -0.1 * Math.sin(Math.PI * u); }
+        if (t >= e1) sq = -0.22 * kick(t, e1, -6, 'bouncy', 0.6);
+      }
+    }
+    mascot.position.set(x, y, z + 0.25); mascot.scale.set(1 + 0.6 * Math.max(0, sq) - 0.3 * Math.min(0, sq), 1 - Math.max(0, sq) + 0.35 * Math.max(0, -sq) , 1);
+    if (c.character) mascot.quaternion.copy(cam.quaternion);
+    const gy = plats.reduce((g, p) => (Math.abs(p.x - x) < p.w * 0.45 ? Math.max(g, p.y + 0.4) : g), -2.2);
+    msh.position.y = gy; msh.userData.y = gy; msh.at(x, z + 0.25, y - gy, 1);
+    plats.forEach((p, j) => {
+      const lit = t >= times[j] ? 1 : 0, dip = kick(t, times[j], -2.2, 'bouncy', 0.7);
+      p.pm.position.set(p.x, p.y + 0.3 * dip, p.z); p.lm.position.set(p.x, p.y + 0.3 * dip, p.z + 0.92); p.tx.set(lit);
+      p.lm.scale.setScalar(1 + 0.15 * kick(t, times[j], 5, 'snappy'));
+    });
+  });
+  const dur = c.dur ?? times[times.length - 1] + 1.5;
+  const camKeys = [{ t: 0, p: new THREE.Vector3(plats[0].x, 0, 0) }].concat(plats.slice(1).map((p, j) => ({ t: times[j + 1] - fl(j + 1) * 0.8, p: new THREE.Vector3(p.x, 0, 0), preset: 'smooth', secs: 0.9 })));
+  return { dur, hit: times[0], cuts: [], frame: (t) => {
+    const fx = path(t, camKeys).x;                            // camera first: the billboard mascot copies THIS frame's camera
+    camLook(new THREE.Vector3(fx + 1.2, 4.2, 11.5 - 0.8 * sp(t, 0, 'gentle', dur)), new THREE.Vector3(fx + 0.8, 1.2, 0), t, 0.08, 12);
+    aimRig(new THREE.Vector3(fx, 0, 0));
+    upd.forEach((u) => u(t));
+  } };
+};
+
+// ---- C3 UI flythrough over a tilted app screenshot: the camera flies to each focus region, which lights up with a
+// glowing outline and a callout card, then pulls back to the whole screen.
+SCENES.fly = async (c) => {
+  const imgs = await Promise.all((c.shots ?? []).map(imageTex)); if (!imgs.length) throw new Error('fly: no screenshot');
+  shadowFloor(-0.4);
+  const tx = shotTex(imgs[0], 2400, 0.012), SW = 14, SH = SW * tx.h / tx.w;
+  const slab = new THREE.Group(); scene.add(slab); slab.rotation.x = -1.0; slab.rotation.z = 0.12; slab.position.y = 0.6;
+  const base = roundedCard(SW + 0.3, SH + 0.3, 0.3, col('primary').multiplyScalar(0.5), 0.3); base.position.z = -0.16; slab.add(base);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.MeshBasicMaterial({ map: tx.tex, toneMapped: false })); scr.position.z = 0.002; slab.add(scr);
+  slab.updateMatrixWorld(true);
+  const foci = c.focus ?? [{ x: 0.25, y: 0.3, w: 0.3, h: 0.2, label: 'Here' }];
+  const local = (f) => new THREE.Vector3((f.x + f.w / 2 - 0.5) * SW, (0.5 - (f.y + f.h / 2)) * SH, 0);
+  const world = (v) => v.clone().applyMatrix4(slab.matrixWorld);
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(slab.quaternion);
+  const per = c.per ?? 2.2, t0 = 1.0, upd = [];
+  const wide = { p: new THREE.Vector3(0, 9.5, 13), look: new THREE.Vector3(0, 0.4, 0) };
+  const pk = [{ t: 0, p: wide.p.clone().add(new THREE.Vector3(0, 2, 4)) }, { t: 0, p: wide.p }], lk = [{ t: 0, p: wide.look }, { t: 0, p: wide.look }];
+  pk[1] = { t: 0.0, p: wide.p, preset: 'gentle', secs: 1.2 };
+  foci.forEach((f, i) => {
+    // never closer than ~0.65 of the screen's width in view, so a 1200-px screenshot stays sharp at 1080p
+    const c3 = world(local(f)), d = Math.max(c.minDist ?? 9, 3.2 + 9 * Math.max(f.w, f.h * SH / SW));
+    const eye = c3.clone().addScaledVector(normal, d).add(new THREE.Vector3(0.6, 0.4, 0));
+    const ts = t0 + i * per;
+    pk.push({ t: ts, p: eye, preset: 'smooth', secs: 1.0 }); lk.push({ t: ts, p: c3, preset: 'smooth', secs: 1.0 });
+    // glow outline on the region
+    const gw = f.w * SW, gh = f.h * SH;
+    const ot = canvasTex(1024, Math.max(64, Math.round(1024 * gh / gw)), (cx, w, h, a) => {
+      cx.globalAlpha = a; cx.shadowColor = css('accent'); cx.shadowBlur = Math.min(w, h) * 0.06; cx.strokeStyle = css('accent'); cx.lineWidth = Math.max(4, w * 0.008);
+      cx.beginPath(); cx.roundRect(w * 0.04, h * 0.04, w * 0.92, h * 0.92, Math.min(w, h) * 0.08); cx.stroke();
+    });
+    const om = plane(ot, gw * 1.08, { order: 4 }); om.position.copy(local(f)).add(new THREE.Vector3(0, 0, 0.02)); slab.add(om);
+    const lt = glassCardTex(900, 240, (cx, w, h) => textOnCard(cx, w, h, [{ s: f.label ?? '', role: 'sb', size: 0.34 }])).set();
+    const lm = plane(lt, Math.min(4.2, 2 + gw * 0.3), { order: 5 }); scene.add(lm);
+    upd.push((t) => {
+      const a = sp01(t, ts + 0.55, 'smooth', 0.4) * (1 - sp01(t, ts + per - 0.15, 'uiExit', 0.25));
+      ot.set(Math.round(a * 50) / 50); om.visible = a > 0.01;
+      const p = sp(t, ts + 0.7, 'snappy', 0.6) * (1 - sp01(t, ts + per - 0.15, 'uiExit', 0.25));
+      lm.visible = p > 0.01; lm.scale.setScalar(Math.max(0.001, p)); lm.material.opacity = clamp01(p * 1.5);
+      lm.position.copy(c3).addScaledVector(normal, 0.9).add(new THREE.Vector3(0, 0.5 + 0.25 * p, 0)); lm.quaternion.copy(cam.quaternion);
+    });
+  });
+  const tend = t0 + foci.length * per;
+  pk.push({ t: tend, p: wide.p.clone().add(new THREE.Vector3(0, 0.6, 1.2)), preset: 'smooth', secs: 1.2 }); lk.push({ t: tend, p: wide.look, preset: 'smooth', secs: 1.2 });
+  const dur = c.dur ?? tend + 1.5;
+  return { dur, hit: t0 + 0.55, frame: (t) => { camLook(path(t, pk), path(t, lk), t, 0.05, 13); upd.forEach((u) => u(t)); } };
+};
+
+
+// ---- L6 3D extruded type flythrough: the word (glyph outlines from the profile's head font, or any SVG mark) stands
+// on the floor in 3D; the camera starts low beside the first letter, flies along the word past the letters' faces and
+// rises to land square on the lockup (the hit); a slow drift keeps the end alive. H7 light: warm key, cool rim, contact.
+SCENES.extrude = (c) => {
+  if (!c.svg) throw new Error('extrude: no svg (stage3d.py --text or --svg)');
+  const floor = shadowFloor(0);
+  const data = new SVGLoader().parse(c.svg), shapes = [];
+  data.paths.forEach((p) => SVGLoader.createShapes(p).forEach((sh) => shapes.push(sh)));
+  if (!shapes.length) throw new Error('extrude: the SVG has no filled shapes');
+  const bb = new THREE.Box2(); shapes.forEach((sh) => sh.getPoints(8).forEach((q) => bb.expandByPoint(q)));
+  const size = bb.getSize(new THREE.Vector2()), k = 10 / size.x;               // the word is 10 units wide
+  const depth = (c.depth ?? 0.22) * size.y, bev = 0.035 * size.y;
+  const geo = new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: true, bevelThickness: bev, bevelSize: bev * 0.8, bevelSegments: 4, curveSegments: 10 });
+  // --text: the baseline (c.baseline, SVG y=0) stands on the floor and descenders dip below it, as type does;
+  // --svg: the bottom of the mark stands on the floor
+  const base = c.baseline ?? bb.max.y;
+  geo.translate(-(bb.min.x + size.x / 2), -base, -depth / 2);                 // centred, standing on its baseline
+  const face = glossy(col(c.faceColor ?? 'text'), { clearcoat: 0.6, roughness: 0.32 });
+  const side = glossy(col('accent'), { clearcoat: 0.3, roughness: 0.4, metalness: 0.1 });
+  const mesh = new THREE.Mesh(geo, [face, side]); mesh.scale.set(k, -k, k); shadowy(mesh); scene.add(mesh);
+  mesh.position.y = 0.02;
+  const H3 = size.y * k, Y0 = -Math.max(0, bb.max.y - base) * k, sh = contact(11, 1.6);   // height; bottom (descenders) <= 0
+  // descenders dip through the floor plane: the (invisible) shadow catcher and the contact blob draw first, blended but
+  // without depth writes, so the letters always paint over them and a descender never reads as shadowed through the floor
+  [floor, sh].forEach((m, i) => {
+    Object.assign(m.material, { transparent: false, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor,
+      blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor });
+    m.renderOrder = i - 2;
+  });
+  const dur = c.dur ?? 5.0, HIT = dur - 1.6;
+  const keysAt = (LD) => [{ t: 0, p: new THREE.Vector3(-6.2, 0.55, 2.6) },
+                { t: 0.0, p: new THREE.Vector3(1.5, 0.9, 3.4), preset: 'smooth', secs: HIT * 0.75 },
+                { t: HIT * 0.55, p: new THREE.Vector3(0, Y0 + H3 * 0.55 + 0.6, LD), preset: 'smooth', secs: HIT * 0.6 }];
+  const look = [{ t: 0, p: new THREE.Vector3(-3.5, Y0 + H3 * 0.5, 0) },
+                { t: 0.0, p: new THREE.Vector3(3, Y0 + H3 * 0.45, 0), preset: 'smooth', secs: HIT * 0.75 },
+                { t: HIT * 0.55, p: new THREE.Vector3(0, Y0 + H3 * 0.3, 0), preset: 'smooth', secs: HIT * 0.6 }];   // the lockup lands a little above centre
+  // the landing distance fits the whole mark (width AND height, any frame aspect, drift included) from the hit to the
+  // end: never closer than the 15.5 a wide word gets, backed off until every corner of the mesh is inside the frame
+  const box = new THREE.Box3().setFromObject(mesh), corners = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  const tc = cam.clone();
+  const fits = (LD) => {
+    const ks = keysAt(LD);
+    for (const t of [HIT, (HIT + dur) / 2, dur]) for (const dx of [-0.35, 0.35]) {
+      const p = path(t, ks); p.x += dx; tc.position.copy(p); tc.lookAt(path(t, look)); tc.updateMatrixWorld();
+      for (const v of corners) { const q = v.clone().project(tc); if (Math.abs(q.x) > 0.88 || Math.abs(q.y) > 0.86 || q.z > 1) return false; }
+    }
+    return true;
+  };
+  let LD = 15.5; while (LD < 200 && !fits(LD)) LD += 0.25;
+  const keys = keysAt(LD);
+  C.noOpen = true;
+  return { dur, hit: HIT, frame: (t) => {
+    mesh.position.y = 0.02; sh.at(0, 0, 0.0, 1);
+    const pos = path(t, keys), lk = path(t, look);
+    pos.x += 0.35 * Math.sin(0.4 * t);                                         // a slow drift after the landing
+    camLook(pos, lk, t, 0.04, 21); aimRig(new THREE.Vector3(0, Y0 + H3 * 0.4, 0));
+    if (t >= HIT) { FX.amt = (1 - sp01(t, HIT, 'smooth', 0.6)) * 0.55; FX.spread = 0.06; const q = toScreen(new THREE.Vector3(0, Y0 + H3 * 0.5, 0)); FX.at = [q.x, q.y]; FX.spin = t; }
+  } };
+};
+
+// ================================================================ setup + frames
+const FX = { amt: 0, at: [0.5, 0.5], spin: 0, spread: 0.25, behind: false };
+window.setup = async function (cfg) {
+  C = cfg; W = cfg.width; H = cfg.height; COL = cfg.colors; PAL = cfg.palette ?? [];
+  for (const [fam, url] of Object.entries(cfg.fonts ?? {})) { const f = new FontFace(fam, `url(${url})`); await f.load(); document.fonts.add(f); }
+  if (R) { R.dispose(); R.domElement.remove(); }
+  R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  R.setPixelRatio(1); R.setSize(W, H); R.setClearColor(0x000000, 0); R.autoClear = false;
+  R.outputColorSpace = THREE.SRGBColorSpace; R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.0;
+  R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(R.domElement);
+  scene = new THREE.Scene();
+  const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.45;
+  cam = new THREE.PerspectiveCamera(cfg.fov ?? 32, W / H, 0.1, 400);
+  makePasses(); RIG = lightRig(cfg.shadowSpan ?? 14);
+  const make = SCENES[cfg.scene]; if (!make) throw new Error('unknown scene ' + cfg.scene + ' (have ' + Object.keys(SCENES).join(', ') + ')');
+  SC = await make(cfg);
+  return { duration: Math.round(SC.dur * 1000) / 1000, hit: SC.hit ?? null, cuts: SC.cuts ?? null };
+};
+window.frameAt = function (t, layer = 'all') {
+  FX.amt = 0; FX.behind = false; SC.frame(t, layer);
+  bgMat.uniforms.t.value = t;
+  bgMat.uniforms.lift.value = C.lightsUp === false ? 1 : 0.08 + 0.92 * sp01(t, 0, 'smooth', 0.7);   // lights up from near-black
+  R.setClearColor(0x000000, 0); R.clear();
+  if (!C.alpha && layer === 'all') { R.render(bgScene, bgCam); R.clearDepth(); }
+  const fx = FX.amt > 0.002 && layer !== 'back';
+  if (fx) { fxMat.uniforms.amt.value = FX.amt; fxMat.uniforms.spread.value = FX.spread; fxMat.uniforms.at.value.set(FX.at[0], FX.at[1]); fxMat.uniforms.spin.value = FX.spin; }
+  if (fx && FX.behind) R.render(fxScene, bgCam);              // a glow behind the scene (brand glow)
+  R.render(scene, cam);
+  if (fx && !FX.behind) R.render(fxScene, bgCam);             // a burst over everything (transitions, hits)
+  return R.domElement.toDataURL('image/png');
+};
+window.ready = true;
+</script></body></html>

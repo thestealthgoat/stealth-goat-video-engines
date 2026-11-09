@@ -172,3 +172,22 @@ Only out points move, never in points; replays move in source time (`speed`). Th
 `E['music'][0]['in']`, so build it with `--start <music in>` (auto does). `E['beats']` records the bar map, the drop
 (reel seconds) and every cut with what it landed on. Leave the music argument out to use the edit's own music path
 (mapped for this machine through `--profile`).
+
+## measure.py — measure a finished piece, fit springs, prove the rebuild (2026-11-08)
+For rebuilding an After Effects open (or any finished motion piece) on springs. Free tools only (ffmpeg, OpenCV,
+numpy, scipy). `python3 engine/measure.py -h` has the full method.
+```
+python3 engine/measure.py probe   open.mp4 --out m/probe [--start S --end S] [--dump]      # cuts, flicker runs, flashes, events, palette per shot
+python3 engine/measure.py track   open.mp4 --out m/track --start S --end S --ref T --el name:x,y,w,h [--el ...]   # position, scale, rotation, opacity per element
+python3 engine/measure.py fit     m/track/track.json [--only a,b] [--max-springs 1] [--start-at S] [--op-step 0.5]  # springs + flicker steps
+python3 engine/measure.py compare open.mp4 rebuild.mp4 --start S --out side.mp4 [--audio]   # side-by-side + per-frame SSIM (.ssim.csv)
+```
+- `track` uses ECC (affine) frame to frame outward from `--ref` (a frame where every element is fully visible). Under
+  heavy motion blur it loses the lock: geometry then holds and is marked `ok: false`; measure those frames another way
+  (a bright edge's row, as the lockup did with its light bar) and refit with `--start-at` the section's first frame.
+- Opacity is the contrast gain against `--ref`. Motion blur and defocus also lower it: check the frame mean brightness
+  before reading a low gain as a fade (the lockup's early "0.4" was focus, not light).
+- `fit` reports the nearest preset; measured AE camera moves are often overdamped (zeta 1.2-2.5), so the rebuild keeps
+  the measured zeta / omega and says which preset is closest.
+- First use: a reference show-open's closing title sign (124 frames) -> motion.html `lockup`; per-frame SSIM mean
+  0.78 (settled hold 0.92), with the original set as `--plate` (text painted out).

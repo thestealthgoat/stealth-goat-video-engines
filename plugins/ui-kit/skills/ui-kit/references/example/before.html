@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contact ACME (before)</title>
+<style>
+  /* a typical ad-hoc form: hard-coded colours, placeholders as labels, focus removed, a pre-ticked box */
+  body { font-family: Arial, sans-serif; background: #fafafa; color: #333; margin: 40px; }
+  form { width: 520px; }
+  input, select, textarea { display: block; width: 100%; margin: 8px 0; padding: 8px; border: 1px solid #ddd; outline: none; }
+  .hint { color: #aaa; font-size: 12px; }
+  button { background: #ff9f43; color: #fff; border: 0; padding: 10px 20px; outline: none; }
+  .no { color: #ccc; font-size: 11px; }
+</style>
+</head>
+<body>
+  <h1>Contact us</h1>
+  <form>
+    <input name="name" placeholder="Your name">
+    <input name="email" placeholder="Email">
+    <span class="hint">We reply within 2 working days</span>
+    <select name="topic"><option>Topic</option><option>Quote</option><option>Support</option></select>
+    <textarea name="message" placeholder="Message"></textarea>
+    <label><input type="checkbox" name="news" checked style="display:inline;width:auto"> Send me offers</label>
+    <button>Send</button> <a class="no" href="#">No thanks, I don't like good deals</a>
+  </form>
+</body>
+</html>

@@ -24,7 +24,9 @@ Checks, in one run:
   clicks     audio sample discontinuities; dropouts (digital silence inside the programme); silence >= 0.5 s
   hook       something moves in the first 0.5 s; a strong moment (cut or big move) by 2 s
   holds      no hold over 0.8 s without life (motion, explainer); static tail / end card <= 1.5 s
-  freshness  explainer only: no stretch longer than --max-scene without a new visual (cut or new element)
+  freshness  explainer only: no stretch longer than --max-scene without a new visual: a cut, a scene change (colour
+             histogram), or a local state change (a part of the frame that changes and stays changed: a new element,
+             a readout or label changing, a box landing; a dot passing through or a steady drift doesn't count)
 
 Every flag is written as a fix line:  f<start>-f<end> (mm:ss.s) - what - why - fix
 Text safe-area and over-face checks are listed in review.md as manual checks to do from the sheet.
@@ -219,7 +221,7 @@ def probe(path):
 
 
 # ---- video pass ------------------------------------------------------------------------------------------------
-def analyse_video(path, info, width, tmp):
+def analyse_video(path, info, width, tmp, keep_small=False):
     """One decode: per-frame stats from a small yuv444 copy, plus ffmpeg scdet scores from the same graph."""
     w = max(2, width - width % 2)
     h = max(2, int(round(info["h"] * w / info["w"])) // 2 * 2)
@@ -240,6 +242,9 @@ def analyse_video(path, info, width, tmp):
     k_strong = max(1, int(round(0.2 * info["fps"])))
     k_nov = max(1, int(round(0.25 * info["fps"])))
     Y, mad1, madskip, cfrac, dup, strong, nov = [], [], [], [], [], [], []
+    small = []                                    # 128-px-wide luma frames for the local freshness measure (E6)
+    sx_idx = np.linspace(0, w - 1, min(w, 128)).astype(int)
+    sy_idx = np.linspace(0, h - 1, max(2, int(round(min(w, 128) * h / w)))).astype(int)
     stills = []
     ring_y, ring_h = [], []
     prev = prev2 = anchor = None
@@ -273,6 +278,8 @@ def analyse_video(path, info, width, tmp):
         if len(ring_h) > k_nov + 1:
             ring_h.pop(0)
         strong.append(float((np.abs(f - ring_y[0]) > STRONG_LEVEL).mean()) if len(ring_y) > 1 else 0.0)
+        if keep_small:                            # explainer only: ~9 KB a frame (uint8)
+            small.append(y8.reshape(h, w)[np.ix_(sy_idx, sx_idx)].copy())
         nov.append(float(np.abs(hist - ring_h[0]).sum() / 6.0) if len(ring_h) > 1 else 0.0)
         prev2, prev = prev, f
         n += 1
@@ -299,7 +306,7 @@ def analyse_video(path, info, width, tmp):
         errors.append("scdet produced no scores")
     return {"n": n, "w": w, "h": h, "Y": np.array(Y), "mad1": np.array(mad1), "madskip": np.array(madskip),
             "c": np.array(cfrac), "dup": np.array(dup), "strong": np.array(strong), "nov": np.array(nov),
-            "score": score, "stills": stills, "errors": errors}
+            "score": score, "stills": stills, "errors": errors, "small": small}
 
 
 # ---- audio pass ------------------------------------------------------------------------------------------------
@@ -831,7 +838,7 @@ def gate_hook_holds(R, V, cuts, kind, max_scene, holds, intended=frozenset()):
     else:
         R.gate("hook: motion by 0.5 s", "PASS", f"first change at {t_move:.2f} s", "<= 0.50 s")
     # 2. a strong moment by 2 s
-    lim = int(2.0 * fps)
+    lim = int(round(2.0 * fps))
     t_cut = next((f / fps for f, _, _ in cuts if f <= lim), None)
     big = np.where(V["strong"][:lim + 1] >= STRONG_FRAC)[0]
     t_big = big[0] / fps if len(big) else None
@@ -873,14 +880,75 @@ def gate_hook_holds(R, V, cuts, kind, max_scene, holds, intended=frozenset()):
         R.gate("end card / static tail", "PASS", f"{t_tail:.2f} s", "<= 1.5 s")
 
 
+TILE_T = 3.0            # freshness, local: mean abs luma change of one tile (8x6 grid) that counts as new
+SHIFT = 8               # ... unless the old tile shifted up to 8 px (of 128; ~120 px/s at 1080p) explains it (motion)
+def local_events(small, fps):
+    """Frames where some part of the picture gets a new state: a tile (8x6 grid) differs from 0.25 s before, still
+    differs 0.25 s later, and has (mostly) settled by then. A new element arriving, a readout changing ('25 ms' to
+    '100 ms') or a box landing counts; a dot moving through a tile (changes, then changes back) or a steady drift (never
+    settles) does not, and neither does a change the old picture shifted by up to SHIFT px explains (something moving
+    in or out of the tile; compared blurred, with a tolerance relative to the change, so sub-pixel moves and slow
+    pushes count as motion), nor a tile going back to a state it showed in the last second (a blink or toggle). Changes over more than 60% of the tiles are left to the colour-histogram measure (cuts,
+    scene changes)."""
+    n = len(small)
+    k = max(1, int(round(0.25 * fps)))
+    if n < 2 * k + 1:
+        return np.zeros(n, bool)
+    hh, ww = small[0].shape
+    ty, tx = np.linspace(0, hh, 7).astype(int), np.linspace(0, ww, 9).astype(int)
+    F = lambda j: small[j].astype(np.int16)
+    def blur(a):                                  # 3x3 box blur: sub-pixel moves and pushes match after a shift
+        p = np.pad(a.astype(np.float32), 1, mode="edge")
+        return sum(p[dy:dy + a.shape[0], dx:dx + a.shape[1]] for dy in range(3) for dx in range(3)) / 9.0
+    def tiles(a, b):
+        d = np.abs(a - b)
+        return np.array([[d[ty[r]:ty[r + 1], tx[c]:tx[c + 1]].mean() for c in range(8)] for r in range(6)])
+    out = np.zeros(n, bool)
+    for i in range(k, n - k):
+        cur, old = F(i), F(i - k)
+        before = tiles(cur, old)
+        if before.max() < TILE_T:
+            continue
+        new = F(i + k)
+        after = tiles(new, cur)
+        span = tiles(new, old)
+        hit = (before >= TILE_T) & (span >= TILE_T) & (after <= 0.5 * before)
+        if not hit.any() or hit.mean() > 0.6:
+            continue
+        seen = [F(j) for j in (i - 2 * k, i - 3 * k, i - 4 * k) if j >= 0]   # earlier states (a toggle comes back)
+        bn, bo = blur(new), blur(old)
+        for r, c in zip(*np.nonzero(hit)):
+            y0, y1, x0, x1 = ty[r], ty[r + 1], tx[c], tx[c + 1]
+            new_t = new[y0:y1, x0:x1]
+            if any(np.abs(new_t - e[y0:y1, x0:x1]).mean() < TILE_T for e in seen):
+                continue                          # back to a state shown in the last second: a blink, not news
+            tol = max(TILE_T, 0.35 * span[r, c])  # motion, not news: the old picture shifted explains the new one
+            bt, best = bn[y0:y1, x0:x1], span[r, c]
+            for dy in range(-SHIFT, SHIFT + 1):
+                for dx in range(-SHIFT, SHIFT + 1):
+                    if y0 - dy < 0 or y1 - dy > hh or x0 - dx < 0 or x1 - dx > ww:
+                        continue
+                    best = min(best, float(np.abs(bt - bo[y0 - dy:y1 - dy, x0 - dx:x1 - dx]).mean()))
+                    if best < tol:
+                        break
+                if best < tol:
+                    break
+            if best >= tol:
+                out[i] = True
+                break
+    return out
+
+
 def gate_freshness(R, V, cuts, max_scene):
     fps, n = R.fps, R.n
     ev = {0} | {f for f, _, _ in cuts}
     nov = V["nov"]
+    loc = local_events(V.get("small") or [], fps)
+    new = [(nov[i] >= NOV_T) or bool(loc[i]) if i < len(loc) else nov[i] >= NOV_T for i in range(n)]
     refr = max(1, int(round(0.5 * fps)))
     last = -refr
     for i in range(1, n):
-        if nov[i] >= NOV_T and (nov[i - 1] < NOV_T or i - last >= refr):
+        if new[i] and (not new[i - 1] or i - last >= refr):
             if i - last >= int(0.2 * fps):
                 ev.add(i); last = i
     ev = sorted(ev)
@@ -1156,7 +1224,7 @@ def main(argv=None):
     try:
         try:
             info = probe(a.video)
-            V = analyse_video(a.video, info, a.width, tmp)
+            V = analyse_video(a.video, info, a.width, tmp, keep_small=(kind == "explainer"))
         except Exception as e:  # noqa: BLE001
             print(f"qa: cannot read {a.video}: {e}")
             return 2

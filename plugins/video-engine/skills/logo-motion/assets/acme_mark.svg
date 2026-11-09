@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <!-- ACME sample mark for trying logo-motion with the demo profile: a hexagon badge with a letter A (counter included). -->
+  <path fill="#F2B705" d="M200 20 L356 110 V290 L200 380 L44 290 V110 Z"/>
+  <path fill="#0B3D2E" d="M200 48 L332 124 V276 L200 352 L68 276 V124 Z"/>
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M200 96 L290 300 H244 L226 256 H174 L156 300 H110 Z M200 160 L184 216 H216 Z"/>
+</svg>

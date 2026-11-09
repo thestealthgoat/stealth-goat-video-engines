@@ -1,0 +1,10 @@
+{
+  "name": "video-engine",
+  "version": "0.1.0",
+  "description": "Make videos with a local, open-source engine: animated logos, explainers computed from real numbers, person mattes, stats cards and 3D card scenes, talking-head edits, captions, cinematic edit effects, and a QA gate that checks every render. Bring your own brand profile.",
+  "author": { "name": "thestealthgoat" },
+  "homepage": "https://github.com/thestealthgoat/stealth-goat-video-engines",
+  "repository": "https://github.com/thestealthgoat/stealth-goat-video-engines",
+  "license": "MIT",
+  "keywords": ["video", "motion graphics", "explainer", "logo animation", "matte", "captions", "ffmpeg"]
+}

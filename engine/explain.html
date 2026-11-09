@@ -1,0 +1,554 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+<script src="spring.js"></script>
+</head><body>
+<script>
+// Explainer renderer (E2): draws a storyboard.json frame by frame on one continuous canvas that transforms in place.
+// A beat lists the elements on screen. An element whose id is in the next beat stays and its numbers spring to the new
+// values (a state change); an element that is not exits (smooth fade + drift up), a new one enters (snappy slide +
+// smooth fade, never growing from zero). Captions (the beat's `say`) run word by word in one fixed zone, the keyword
+// in an accent box (E1 style). All motion is spring.js and every frame is a pure function of t. Colours and fonts come
+// from setup(cfg): cfg.colors (bg, panel, text, dim, accent, signal, hot, cool), cfg.fonts (Head, Body, BodySB, Mono).
+// Coordinates are frame fractions (x, y, w, h); an element may carry "v": {...} overrides used in a portrait frame.
+const S = window.Spring, PR = S.PRESETS;
+let W, H, ctx, cfg, C, B, IMGS = {}, DATA = {}, PORTRAIT = false;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const SETTLE1 = {};
+function timed(name, secs, launch = 0) {               // preset damping, omega scaled to settle in `secs`
+  const p = PR[name], key = name + ':' + launch;
+  if (SETTLE1[key] == null) SETTLE1[key] = S.settle({ zeta: p.zeta, omega: 1, v0: launch });
+  const omega = SETTLE1[key] / secs; return { zeta: p.zeta, omega, v0: launch * omega };
+}
+const prog = (t, start, c) => S.progress(t, { start, ...(typeof c === 'string' ? { preset: c } : c) });
+const fade = (t, start, c = 'smooth') => S.clamp01(prog(t, start, c));
+const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const col = (c) => (c && c[0] !== '#' ? (C[c] || c) : c);
+const lumOf = (c) => { const h = String(col(c) || '#000').replace('#', ''); const n = parseInt(h.length === 3 ? h.replace(/./g, (x) => x + x) : h.slice(0, 6), 16);
+  return 0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255); };
+const brighter = (a, b) => (lumOf(a) >= lumOf(b) ? a : b);
+
+async function loadFonts(fonts) {
+  const failed = [];
+  for (const [n, u] of Object.entries(fonts || {})) {
+    const ff = new FontFace(n, `url(${u})`);
+    try { await ff.load(); document.fonts.add(ff); } catch (e) { failed.push(n); }
+  }
+  await document.fonts.ready;
+  if (failed.length) throw new Error('font load failed: ' + failed.join(', '));
+}
+
+window.setup = async function (c) {
+  cfg = c; W = c.width; H = c.height; C = c.colors; B = c.board; PORTRAIT = H > W;
+  await loadFonts(c.fonts);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; document.body.appendChild(cv); ctx = cv.getContext('2d');
+  for (const [k, u] of Object.entries(c.images || {})) { const im = new Image(); im.src = u; await im.decode(); IMGS[k] = im; }
+  DATA = c.data || {};
+  prepare();
+  return { duration: B.duration };
+};
+
+// ---- timeline: element lives and keyframes ------------------------------------------------------------------------
+let LIVES = [];
+const SEEN = new Set(), ENTER_GAP = 0.15, EXIT_S = 0.22;                                         // {id, type, enter, exit, keys: [{t, p}]}
+function prepare() {
+  const beats = B.beats, open = {};
+  beats.forEach((b, bi) => {
+    const here = new Set();
+    (b.show || []).forEach((e) => {
+      const p = Object.assign({}, e, PORTRAIT && e.v ? e.v : {});
+      here.add(e.id);
+      const cont = open[e.id] && open[e.id].type === e.type;
+      // a new element waits a moment after a beat cut so the outgoing ones are mostly gone (no stacked layers)
+      const at = b.t0 + (e.in || 0) + (!cont && bi > 0 && !e.in ? ENTER_GAP : 0);
+      if (cont && e.in) {                               // a delayed re-declaration: a string that changes (text, label,
+        const last = open[e.id].keys[open[e.id].keys.length - 1].p, blank = {};   // unit) leaves at the cut, so an old value
+        for (const k of STRKEYS) if (k in last && last[k] !== p[k]) blank[k] = ''; // never sits next to the new beat's words
+        if (Object.keys(blank).length) open[e.id].keys.push({ t: b.t0, p: Object.assign({}, last, blank, { _blank: 1, _unit: last.unit, _decimals: last.decimals }), full: true });
+      }
+      if (cont) open[e.id].keys.push({ t: b.t0 + (e.in || 0), p, full: true });   // a full re-declaration: no style carry-over
+      else { if (open[e.id]) open[e.id].exit = at; const L = { id: e.id, type: e.type, enter: at, exit: Infinity, first: !SEEN.has(e.id), keys: [{ t: at, p }] };
+             SEEN.add(e.id); LIVES.push(L); open[e.id] = L; }
+    });
+    (b.changes || []).forEach((ch) => {                   // staged changes inside a beat: {at, id, set: {...}}
+      const L = open[ch.id]; if (!L) return;
+      L.keys.push({ t: b.t0 + ch.at, p: Object.assign({}, L.keys[L.keys.length - 1].p, ch.set, PORTRAIT && ch.v ? ch.v : {}) });
+      L.keys.sort((a, z) => a.t - z.t);
+    });
+    for (const id of Object.keys(open)) if (!here.has(id) && open[id].exit === Infinity && !(beats[bi].keep || []).includes(id)) {
+      open[id].exit = Math.max(open[id].enter, b.t0 + (b.exit_at || 0)); delete open[id];
+    }
+  });
+}
+const TIMEKEYS = new Set(['markAt', 'boxAt', 'at', 'start', 'in', 'draw', 'decimals']);   // (decimals switch: a sprung 0 -> 1
+// never reaches 1, and toFixed(0.99) shows no decimals at all)
+const STRKEYS = ['text', 'label', 'unit', 'prefix', 'valueText'];
+// numeric params spring from the previous keyframe's value (smooth: readouts and curves never overshoot);
+// arrays interpolate element by element; other values switch at the keyframe
+function params(L, t) {
+  const ks = L.keys; let cur = Object.assign({}, ks[0].p), prev = null, since = Infinity;
+  for (let i = 1; i < ks.length && ks[i].t <= t; i++) {
+    prev = cur; since = t - ks[i].t;
+    const k = ks[i], spec = k.p.spring || 'smooth', pr = S.clamp01(prog(t, k.t, spec === 'snappy' ? 'smooth' : spec));
+    const nxt = {};
+    for (const key of Object.keys(k.p)) {
+      const a = cur[key], b = k.p[key];
+      if (TIMEKEYS.has(key)) nxt[key] = b;              // times switch, never spring
+      else if (key === 'value' && L.type === 'readout' && k.p._blank) nxt[key] = a;      // clearing: the old number holds as it fades
+      else if (key === 'value' && L.type === 'readout' && (k.p.unit !== (cur._blank ? cur._unit : cur.unit) || cur._blank || (k.p.label && cur.label && k.p.label !== cur.label)))
+        nxt[key] = b * pr;                                // a new quantity: count up from 0, never through the old number
+      else if (typeof a === 'number' && typeof b === 'number') nxt[key] = a + (b - a) * pr;
+      else if (Array.isArray(a) && Array.isArray(b) && a.length === b.length && typeof b[0] === 'number') nxt[key] = b.map((v, j) => a[j] + (v - a[j]) * pr);
+      else nxt[key] = b;
+    }
+    if (!k.full) for (const key of Object.keys(cur)) if (!(key in nxt)) nxt[key] = cur[key];   // changes merge
+    cur = nxt;
+  }
+  cur._prev = prev; cur._since = since;
+  return cur;
+}
+// a string that changed at a keyframe crossfades: old slides up and out, new rises in (smooth, ~0.3 s)
+const SWAP = 0.3;
+function swapped(p, key) {      // out, then in: the old string is gone before the new one passes ~30%
+  if (!p._prev || p._prev[key] === p[key] || p._since >= SWAP + 0.4) return null;
+  const k = S.clamp01(prog(p._since, 0, timed('smooth', SWAP)));
+  return { old: p._prev[key], k, kOut: S.clamp01(k / 0.45), kIn: S.clamp01((k - 0.4) / 0.6) };
+}
+
+// ---- drawing helpers ------------------------------------------------------------------------------------------------
+const SAFE = 0.04;                              // side margin (share of the width) no text crosses
+function room(x, al) { const l = SAFE * W, r = (1 - SAFE) * W; return al === 'left' ? r - x : al === 'right' ? x - l : 2 * Math.min(x - l, r - x); }
+function text(str, x, y, o = {}) {
+  const f = o.font || 'Body'; let sz = (o.size || 40) * (f === 'Head' ? 1 : (cfg.fontScale || 1));
+  if (f === 'Head' && cfg.headCaps && /\d/.test(str)) return unitsText(str, x, y, o);
+  if (str && o.fit !== false) {                  // shrink (never grow) a line that would run past the safe margin
+    ctx.save(); ctx.font = `${sz}px ${f}`; if (o.spacing) ctx.letterSpacing = o.spacing + 'px';
+    const w = ctx.measureText(str).width, avail = room(x, o.align || 'center'); ctx.restore();
+    if (w > avail && avail > 0) { const k = avail / w; sz *= k; o = { ...o, spacing: o.spacing ? o.spacing * k : o.spacing, size: (o.size || 40) * k }; }
+  }
+  ctx.save(); ctx.font = `${sz}px ${f}`; ctx.fillStyle = col(o.color) || C.text;
+  ctx.textAlign = o.align || 'center'; ctx.textBaseline = o.base || 'middle';
+  if (o.spacing) ctx.letterSpacing = o.spacing + 'px';
+  if (o.glow) { ctx.shadowColor = col(o.glow); ctx.shadowBlur = (o.size || 40) * 0.35; }
+  ctx.fillText(str, x, y); ctx.restore();
+}
+function glowDot(x, y, r, color, a = 1) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 3.2);
+  g.addColorStop(0, hexA('#ffffff', 0.95 * a)); g.addColorStop(0.25, hexA(color, 0.9 * a)); g.addColorStop(1, hexA(color, 0));
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 3.2, 0, 7); ctx.fill(); ctx.restore();
+}
+function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+// a caps-only head face can't show units (dB, ms, Hz, kHz, x1.26): those tokens are set in the body face
+function unitsText(str, x, y, o) {
+  const toks = str.split(/(\bk?Hz\b|\bdB\b|\bms\b|\bx(?=\d))/).filter((s) => s !== '' && s != null);
+  const sz = o.size || 40, isU = (s) => /^(k?Hz|dB|ms|x)$/.test(s);
+  ctx.save(); const ws = toks.map((s) => { ctx.font = isU(s) ? `${sz * 0.8 * (cfg.fontScale || 1)}px BodySB` : `${sz}px Head`; return ctx.measureText(s).width; });
+  let tw = ws.reduce((a, b) => a + b, 0); const al = o.align || 'center', avail = room(x, al);
+  if (o.fit !== false && tw > avail && avail > 0) {  // the same safe-margin fit as text()
+    ctx.restore(); return unitsText(str, x, y, { ...o, size: sz * avail / tw, fit: false }); }
+  let cx = al === 'center' ? x - tw / 2 : al === 'right' ? x - tw : x;
+  ctx.fillStyle = col(o.color) || C.text; ctx.textBaseline = o.base || 'middle'; ctx.textAlign = 'left';
+  if (o.glow) { ctx.shadowColor = col(o.glow); ctx.shadowBlur = sz * 0.35; }
+  toks.forEach((s, i) => { ctx.font = isU(s) ? `${sz * 0.8 * (cfg.fontScale || 1)}px BodySB` : `${sz}px Head`; ctx.fillText(s, cx, y + (isU(s) ? sz * 0.04 : 0)); cx += ws[i]; });
+  ctx.restore();
+}
+const LBL = () => 0.03 * Math.min(W, H);       // smallest label size (readable on a phone)
+const fmt = (v, d = 0) => { const x = Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v;    // 10,000 and up are grouped (21,235)
+  return Math.abs(x) >= 9999.5 ? x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : x.toFixed(d); };
+
+// ---- element types ------------------------------------------------------------------------------------------------
+// each draw(p, t, life) works in frame px; life.age = seconds since enter
+const DRAW = {
+  // text: role eyebrow (small spaced caps, dim) | title (big head font) | body; optional accent word via `hi`
+  text(p, t) {
+    const role = p.role || 'body', base = Math.min(W, H);
+    const size = (p.size || (role === 'title' ? 0.13 : role === 'eyebrow' ? 0.028 : 0.045)) * base;
+    const font = role === 'title' ? 'Head' : role === 'eyebrow' ? 'BodySB' : 'Body';
+    const color = p.color || (role === 'eyebrow' ? 'dim' : 'text');
+    const o = { size, font, color, align: p.align || 'center', spacing: role === 'eyebrow' ? size * 0.25 : (role === 'title' ? size * 0.02 : 0), glow: p.glow };
+    const sw = swapped(p, 'text'), ga = ctx.globalAlpha;
+    if (sw) {
+      const oc = (p._prev && p._prev.color) || color;
+      ctx.globalAlpha = ga * (1 - sw.kOut); text(sw.old, p.x * W, p.y * H - sw.kOut * size * 0.35, { ...o, color: oc, glow: p._prev && p._prev.glow });
+      ctx.globalAlpha = ga * sw.kIn; text(p.text, p.x * W, p.y * H + (1 - sw.kIn) * size * 0.35, o); ctx.globalAlpha = ga;
+    } else text(p.text, p.x * W, p.y * H, o);
+  },
+  // readout: label above, big monospace value + unit; counts on the smooth spring when the value changes
+  readout(p) {
+    const base = Math.min(W, H), sz = (p.size || 0.06) * base, x = p.x * W, y = p.y * H;
+    const lo = { size: Math.max(sz * 0.34, LBL()), font: 'BodySB', color: 'dim', align: p.align || 'center', spacing: sz * 0.06 }, sw = swapped(p, 'label'), ga = ctx.globalAlpha;
+    if (sw) { ctx.globalAlpha = ga * (1 - sw.kOut); text(sw.old || '', x, y - sz * 0.95 - sw.kOut * sz * 0.2, lo);
+              ctx.globalAlpha = ga * sw.kIn; text(p.label || '', x, y - sz * 0.95 + (1 - sw.kIn) * sz * 0.2, lo); ctx.globalAlpha = ga; }
+    else text(p.label || '', x, y - sz * 0.95, lo);
+    const hot = p.hot ? col(p.hot) : null;
+    if (p._blank) {                                // cleared at a beat cut: the old number fades out where it is
+      const k = S.clamp01(prog(p._since, 0, timed('smooth', 0.25))); if (k >= 1) return;
+      ctx.globalAlpha = ga * (1 - k);
+      text(`${p._prev && p._prev.prefix || ''}${fmt(p.value, p._decimals || 0)}${p._unit ? ' ' + p._unit : ''}`, x, y, { size: sz, font: 'Mono', color: hot || p.color || 'text', align: p.align || 'center', glow: hot });
+      ctx.globalAlpha = ga; return;
+    }
+    const vo = { size: sz, font: 'Mono', color: hot || p.color || 'text', align: p.align || 'center', glow: hot };
+    const q = p._prev && !p._prev._blank && (p._prev.unit !== p.unit || (p._prev.label && p.label && p._prev.label !== p.label)) && p._since < SWAP + 0.4
+      ? S.clamp01(prog(p._since, 0, timed('smooth', SWAP))) : null;
+    if (q != null && q < 1) {                      // a new quantity: old number out with its label, then the new one in
+      const kOut = S.clamp01(q / 0.45), kIn = S.clamp01((q - 0.4) / 0.6), pv = p._prev;
+      const ph = pv.hot ? col(pv.hot) : null;     // the old number keeps its own colour (never the next beat's hot)
+      ctx.globalAlpha = ga * (1 - kOut); text(`${pv.prefix || ''}${fmt(pv.value, pv.decimals || 0)}${pv.unit ? ' ' + pv.unit : ''}`, x, y, { ...vo, color: ph || pv.color || 'text', glow: ph });
+      ctx.globalAlpha = ga * kIn; text(`${p.prefix || ''}${fmt(p.value, p.decimals || 0)}${p.unit ? ' ' + p.unit : ''}`, x, y, vo);
+      ctx.globalAlpha = ga; return;
+    }
+    text(`${p.prefix || ''}${fmt(p.value, p.decimals || 0)}${p.unit ? ' ' + p.unit : ''}`, x, y, vo);
+  },
+  // flow: nodes + edges + travelling pulses (a pulse = one lap along `path`, sized by `amp`)
+  flow(p, t, life) {
+    const N = {}; (p.nodes || []).forEach((n) => (N[n.id] = n));
+    // build-up: a node that was not in the element's first declaration enters when its keyframe comes (snappy rise +
+    // smooth fade, from 85% size, never from zero); an edge draws on from its first node once both ends are there
+    const born = {}; (life.keys || []).forEach((k) => (k.p.nodes || []).forEach((n) => { if (born[n.id] == null) born[n.id] = k.t; }));
+    const nIn = (id) => (born[id] == null || born[id] <= life.enter + 1e-6 ? 1 : fade(t, born[id]));
+    const nY = (id) => (born[id] == null || born[id] <= life.enter + 1e-6 ? 0 : (1 - prog(t, born[id], 'snappy')) * 0.03 * H);
+    const eIn = (a, b) => { const tb = Math.max(born[a] ?? life.enter, born[b] ?? life.enter) + 0.12;
+      return tb <= life.enter + 0.13 ? 1 : S.clamp01(prog(t, tb, timed('smooth', 0.5))); };
+    const pos = (id) => [N[id].x * W, N[id].y * H];
+    const base = Math.min(W, H), lw = 0.004 * base;
+    ctx.save(); ctx.lineCap = 'round';
+    (p.edges || []).forEach(([a, b, bend = 0]) => {
+      if (!N[a] || !N[b]) return;
+      const [x0, y0] = pos(a), [x1, y1] = pos(b), mx = (x0 + x1) / 2 - (y1 - y0) * bend, my = (y0 + y1) / 2 + (x1 - x0) * bend;
+      const d = eIn(a, b); if (d <= 0.002) return;
+      ctx.strokeStyle = hexA(col('dim'), 0.55); ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(x0, y0);
+      if (d >= 0.999) ctx.quadraticCurveTo(mx, my, x1, y1);
+      else for (let i = 1; i <= 24; i++) { const q = (i / 24) * d; ctx.lineTo((1 - q) * (1 - q) * x0 + 2 * (1 - q) * q * mx + q * q * x1, (1 - q) * (1 - q) * y0 + 2 * (1 - q) * q * my + q * q * y1); }
+      ctx.stroke();
+    });
+    ctx.restore();
+    const act = new Set(p.active || []), was = new Set((p._prev && p._prev.active) || []);
+    const k = p._prev ? S.clamp01(prog(p._since, 0, timed('smooth', SWAP))) : 1;   // highlights fade, never switch
+    (p.nodes || []).forEach((n) => {
+      const na = nIn(n.id); if (na <= 0.002) return;
+      const gA = ctx.globalAlpha; ctx.globalAlpha = gA * na; ctx.save(); ctx.translate(0, nY(n.id));
+      const [x, y] = pos(n.id), r = (n.r || 0.055) * base * (0.85 + 0.15 * na), wOn = (act.has(n.id) ? k : 0) + (was.has(n.id) && p._prev ? 1 - k : 0);
+      const ac = col(p.activeColor || 'signal'), ga = ctx.globalAlpha;
+      ctx.save(); ctx.fillStyle = C.panel; ctx.strokeStyle = hexA(col('dim'), 0.8); ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+      if (wOn > 0.002) { ctx.save(); ctx.globalAlpha = ga * wOn; ctx.strokeStyle = ac; ctx.lineWidth = lw * 1.6; ctx.shadowColor = ac; ctx.shadowBlur = r * 0.6;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke(); ctx.restore(); }
+      const isz = r * ((n.icon || '').length <= 2 ? 0.9 : 0.55);
+      ctx.globalAlpha = ga * (1 - wOn); text(n.icon || '', x, y, { size: isz, font: 'Head', color: 'dim' });
+      text(n.label, x, y + r * 1.55, { size: 0.03 * base, font: 'BodySB', color: 'dim', spacing: 0.004 * base });
+      ctx.globalAlpha = ga * wOn; text(n.icon || '', x, y, { size: isz, font: 'Head', color: p.activeColor || brighter('signal', 'text') });
+      text(n.label, x, y + r * 1.55, { size: 0.03 * base, font: 'BodySB', color: 'text', spacing: 0.004 * base });
+      if (n.sub) { ctx.globalAlpha = ga * 0.85; text(n.sub, x, y + r * 1.55 + 0.034 * base, { size: LBL() * 0.85, font: 'Mono', color: 'dim' }); }
+      ctx.globalAlpha = ga; ctx.restore(); ctx.globalAlpha = gA;
+    });
+    (p.pulses || []).forEach((pu) => {                 // {start, path:[ids], seg, amp}
+      const seg = pu.seg || 0.5, amp = pu.amp != null ? pu.amp : 1;
+      if (!pu.path || pu.path.length < 2 || pu.path.some((id) => !N[id])) return;
+      const k = (t - pu.start) / seg; if (!(k >= 0) || k >= pu.path.length - 1 + 0.35) return;
+      const i = Math.min(pu.path.length - 2, Math.floor(k)), f = S.clamp01(prog(t, pu.start + i * seg, timed('smooth', seg * 1.15, 0.6)));
+      const a = pu.path[i], b = pu.path[i + 1], fw = (p.edges || []).find((ed) => ed[0] === a && ed[1] === b);
+      const bw = fw ? null : (p.edges || []).find((ed) => ed[0] === b && ed[1] === a);   // edge drawn the other way
+      const bend = fw ? (fw[2] || 0) : bw ? -(bw[2] || 0) : 0;
+      const [x0, y0] = pos(a), [x1, y1] = pos(b), mx = (x0 + x1) / 2 - (y1 - y0) * bend, my = (y0 + y1) / 2 + (x1 - x0) * bend;
+      const q = k >= pu.path.length - 1 ? 1 : f, x = (1 - q) * (1 - q) * x0 + 2 * (1 - q) * q * mx + q * q * x1, y = (1 - q) * (1 - q) * y0 + 2 * (1 - q) * q * my + q * q * y1;
+      const fadeOut = k >= pu.path.length - 1 ? 1 - (k - (pu.path.length - 1)) / 0.35 : 1;
+      glowDot(x, y, (0.006 + 0.012 * Math.min(2, Math.max(0, amp))) * base, col(pu.color || 'signal'), clamp(fadeOut));
+    });
+  },
+  // bars: one bar per item, rising when its time comes (smooth: data never overshoots); reference line at `line`
+  bars(p, t) {
+    const x = p.x * W, y = p.y * H, w = p.w * W, h = p.h * H, n = p.items.length, gap = w * 0.06 / Math.max(1, n - 1), bw = (w - gap * (n - 1)) / n;
+    const base = Math.min(W, H), max = p.max || 2;
+    ctx.save(); ctx.strokeStyle = hexA(col('dim'), 0.5); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x + w, y + h); ctx.stroke(); ctx.restore();
+    p.items.forEach((it, i) => {
+      const g = S.clamp01(prog(t, it.at, 'smooth')), v = it.value * g, bh = h * Math.min(1, v / max);
+      const hot = it.value > (p.line != null ? p.line : 1) + 1e-6;
+      ctx.save(); ctx.fillStyle = hot ? col(p.hotColor || 'hot') : col(p.color || 'signal'); ctx.globalAlpha = 0.9 * fade(t, it.at);
+      rrect(x + i * (bw + gap), y + h - bh, bw, bh, Math.min(8, bw / 4)); ctx.fill(); ctx.restore();
+      text(it.label, x + i * (bw + gap) + bw / 2, y + h + 0.03 * base, { size: LBL(), font: 'BodySB', color: 'dim' });
+    });
+    if (p.line != null) {
+      const ly = y + h - h * Math.min(1, p.line / max);
+      ctx.save(); ctx.setLineDash([10, 8]); ctx.strokeStyle = col('text'); ctx.globalAlpha = 0.7; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 10, ly); ctx.lineTo(x + w + 10, ly); ctx.stroke(); ctx.restore();
+      text(p.lineLabel || '', x + w + 16, ly, { size: LBL(), font: 'Mono', color: 'text', align: 'left' });
+    }
+  },
+  // plot: y(x) curve on log or linear x; draws on left to right as it enters; the part above `hline` is hot
+  plot(p, t, life) {
+    const x = p.x * W, y = p.y * H, w = p.w * W, h = p.h * H, base = Math.min(W, H);
+    const xs = p.xs, ys = p.ys, lx = (v) => (p.xlog ? Math.log10(v) : v), x0 = lx(xs[0]), x1 = lx(xs[xs.length - 1]);
+    const X = (v) => x + ((lx(v) - x0) / (x1 - x0)) * w, Y = (v) => y + h - ((v - p.ymin) / (p.ymax - p.ymin)) * h;
+    ctx.save(); ctx.strokeStyle = hexA(col('dim'), 0.35); ctx.lineWidth = 1.5;
+    (p.xticks || []).forEach((v) => { ctx.beginPath(); ctx.moveTo(X(v), y); ctx.lineTo(X(v), y + h); ctx.stroke(); text(v >= 1000 ? `${v / 1000}k` : `${v}`, X(v), y + h + 0.03 * base, { size: LBL() * 0.95, font: 'Mono', color: 'dim' }); });
+    ctx.restore();
+    (p.yticks || []).forEach(([v, lab]) => {           // [[value, label], ...] on the left edge
+      ctx.save(); ctx.strokeStyle = hexA(col('dim'), 0.35); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 8, Y(v)); ctx.lineTo(x, Y(v)); ctx.stroke(); ctx.restore();
+      text(lab, x - 14, Y(v), { size: LBL() * 0.95, font: 'Mono', color: 'dim', align: 'right' });
+    });
+    text(p.xlabel || '', x + w, y + h + 0.068 * base, { size: LBL(), font: 'BodySB', color: 'dim', align: 'right' });
+    text(p.ylabel || '', x + 0.01 * base, y + 0.022 * base, { size: LBL(), font: 'BodySB', color: 'dim', align: 'left' });   // inside the plot
+    const draw = life.first === false ? 1 : S.clamp01(prog(t, life.enter + 0.1, timed('smooth', 0.9, 0.4)));   // draws on once
+    const n = Math.max(2, Math.floor(xs.length * draw));
+    if (p.hline != null) {
+      ctx.save(); ctx.setLineDash([12, 9]); ctx.strokeStyle = col('text'); ctx.globalAlpha = 0.75; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x, Y(p.hline)); ctx.lineTo(x + w, Y(p.hline)); ctx.stroke(); ctx.restore();
+      text(p.hlineLabel || '', x + w, Y(p.hline) - 0.025 * base, { size: LBL(), font: 'Mono', color: 'text', align: 'right' });
+    }
+    ctx.save(); ctx.lineWidth = 0.0042 * base; ctx.lineJoin = 'round'; ctx.strokeStyle = col(p.color || 'signal'); ctx.shadowColor = col(p.color || 'signal'); ctx.shadowBlur = 10;
+    ctx.beginPath(); for (let i = 0; i < n; i++) { const px = X(xs[i]), py = Y(Math.max(p.ymin, Math.min(p.ymax, ys[i]))); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.stroke(); ctx.restore();
+    if (p.hline != null) {                              // above the line: hot fill
+      ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, Y(p.hline) - y); ctx.clip();
+      ctx.fillStyle = hexA(col(p.hotColor || 'hot'), 0.35); ctx.beginPath(); ctx.moveTo(X(xs[0]), Y(p.hline));
+      for (let i = 0; i < n; i++) ctx.lineTo(X(xs[i]), Y(Math.min(p.ymax, ys[i])));
+      ctx.lineTo(X(xs[n - 1]), Y(p.hline)); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = col(p.hotColor || 'hot'); ctx.lineWidth = 0.0048 * base; ctx.beginPath();
+      for (let i = 0; i < n; i++) { const px = X(xs[i]), py = Y(Math.max(p.ymin, Math.min(p.ymax, ys[i]))); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.stroke(); ctx.restore();
+    }
+    if (p.mark && draw > 0.98) {                        // a labelled marker at x = mark.x (lands on a snappy spring)
+      const mt = p.markAt != null ? p.markAt : life.enter, a = fade(t, mt), dy = (1 - prog(t, mt, 'snappy')) * 0.04 * H;
+      const mx = X(p.mark.x), my = Y(Math.min(p.ymax, p.mark.y != null ? p.mark.y : p.ymax));
+      const mc = p.markColor || 'hot';
+      ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = col(mc); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(mx, y); ctx.lineTo(mx, y + h); ctx.stroke(); ctx.restore();
+      const right = mx < x + w * 0.7;                   // label inside the plot, beside the line
+      ctx.save(); ctx.globalAlpha = a; text(p.mark.label, mx + (right ? 1 : -1) * 0.015 * base, y + 0.045 * base + dy, { size: 0.045 * base, font: 'Mono', color: mc, glow: mc === 'hot' ? 'hot' : null, align: right ? 'left' : 'right' }); ctx.restore();
+    }
+  },
+  // wave: a tone whose amplitude steps once per lap (env[i] per lap), written on over time; time axis in ms
+  wave(p, t, life) {
+    const x = p.x * W, y = p.y * H, w = p.w * W, h = p.h * H, base = Math.min(W, H);
+    const laps = p.env.length, lapW = w / laps, cyc = p.cycles || 5, show = S.clamp01(prog(t, life.enter + 0.05, timed('smooth', p.draw || 1.4, 0.6)));
+    ctx.save(); ctx.strokeStyle = hexA(col('dim'), 0.35); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y + h / 2); ctx.lineTo(x + w, y + h / 2); ctx.stroke();
+    for (let i = 1; i < laps; i++) { ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(x + i * lapW, y); ctx.lineTo(x + i * lapW, y + h); ctx.stroke(); }
+    ctx.restore();
+    ctx.save(); ctx.lineWidth = 0.004 * base; ctx.strokeStyle = col(p.color || 'signal'); ctx.shadowColor = col(p.color || 'signal'); ctx.shadowBlur = 8; ctx.beginPath();
+    const n = Math.floor(w * show);
+    for (let i = 0; i <= n; i++) { const u = i / w, lap = Math.min(laps - 1, Math.floor(u * laps)), a = Math.min(1, p.env[lap] / (p.max || 4));
+      const py = y + h / 2 - Math.sin(u * laps * cyc * 2 * Math.PI) * a * h * 0.46; i ? ctx.lineTo(x + i, py) : ctx.moveTo(x + i, py); }
+    ctx.stroke(); ctx.restore();
+    if (p.ref) {                                        // the first lap's level both ways: "same level" line
+      const ra = Math.min(1, p.env[0] / (p.max || 4)) * h * 0.46;
+      ctx.save(); ctx.setLineDash([10, 8]); ctx.strokeStyle = col('text'); ctx.globalAlpha *= 0.7; ctx.lineWidth = 2;
+      [y + h / 2 - ra, y + h / 2 + ra].forEach((yy) => { ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); }); ctx.restore();
+      text(p.refLabel || 'SAME LEVEL', x + w, y + h / 2 - ra - LBL() * 0.8, { size: LBL(), font: 'BodySB', color: 'text', align: 'right' });
+    }
+    if (p.bracket && show * laps > 1) {                  // a bracket over one lap
+      const bx0 = x + 2, bx1 = x + lapW - 2, by = y - LBL() * 0.6;
+      ctx.save(); ctx.strokeStyle = col('text'); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx0, by + 10); ctx.lineTo(bx0, by); ctx.lineTo(bx1, by); ctx.lineTo(bx1, by + 10); ctx.stroke(); ctx.restore();
+      text(p.bracket, (bx0 + bx1) / 2, by - LBL() * 0.8, { size: LBL(), font: 'Mono', color: 'text' });
+    }
+    if (p.ticks) for (let i = 0; i < laps; i++) if (show * laps > i + 0.5) text(`${fmt((i + 1) * p.lap_ms, 1)} ms`, x + (i + 0.5) * lapW, y + h + 0.03 * base, { size: LBL() * 0.95, font: 'Mono', color: 'dim' });
+  },
+  // burst: a sound-wave hit at (x, y): three shock rings race out across the frame and a hot glow fades (the hook's
+  // strong moment). at = seconds after the element enters
+  burst(p, t, life) {
+    const t0 = life.enter + (p.at || 0), age = t - t0; if (age < 0) return;
+    const R = Math.hypot(W, H), RR = p.r ? p.r * Math.min(W, H) / 0.75 : R, x = p.x * W, y = p.y * H, c = col(p.color || 'hot');   // p.r caps the rings (the core flash stays full size: it is the hit)
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = 1 - S.clamp01(prog(t, t0, timed('smooth', 0.9, 1)));
+    if (g > 1e-4) { const gr = ctx.createRadialGradient(x, y, 0, x, y, R * 0.6); gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.22, c); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save(); ctx.globalAlpha *= 0.62 * g; ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); ctx.restore(); }   // white-hot core: reads on any ground
+    for (let i = 0; i < 3; i++) {
+      const ti = t0 + i * 0.12, r = RR * 0.75 * S.clamp01(prog(t, ti, timed('smooth', 0.9, 1))), a = 1 - S.clamp01(prog(t, ti, timed('smooth', 1.0, 0.6)));
+      if (t < ti || a < 0.003) continue;
+      ctx.strokeStyle = hexA(c, 0.8 * a); ctx.lineWidth = Math.max(2, 0.012 * Math.min(W, H) * a); ctx.beginPath(); ctx.arc(x, y, Math.max(1, r), 0, 7); ctx.stroke();
+    }
+    ctx.restore();
+  },
+  // scope (E7/E8): frames computed from real audio in make.py (storyboard "data": {name: file.json} with
+  // {fps, t0, mode, frames}); mode xy = an XY phosphor trace (L against R, or two tones), spectrum = log-frequency
+  // bars in dB, wave = the waveform. The last few frames stay as a fading trail (phosphor), so it is never a hard swap.
+  scope(p, t, life) {
+    const d = DATA[p.src]; if (!d) return;
+    const x = p.x * W, y = p.y * H, w = p.w * W, h = (p.h || p.w * W / H) * H, base = Math.min(W, H);
+    const mode = p.mode || d.mode || 'xy', c = col(p.color || 'signal');
+    const fi = Math.floor((t - d.t0) * d.fps + 1e-3); if (fi < 0) return;   // +1e-3: 29.97 data on a 29.97003 render
+    const frame = (k) => d.frames[Math.max(0, Math.min(d.frames.length - 1, k))];
+    ctx.save();
+    if (p.grid !== false) {                         // graticule
+      ctx.strokeStyle = hexA(col('dim'), 0.22); ctx.lineWidth = 1.2;
+      if (mode === 'xy') { ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.lineTo(x + w / 2, y); ctx.moveTo(x, y - h / 2); ctx.lineTo(x, y + h / 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, Math.min(w, h) * 0.46, 0, 7); ctx.stroke(); }
+      else { ctx.strokeRect(x - w / 2, y - h / 2, w, h); }
+    }
+    if (mode === 'xy') {
+      const ga = ctx.globalAlpha, trail = p.trail ?? 4, sc = Math.min(w, h) * 0.46 * (p.gain || 1);   // ga: the element's fade
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      for (let k = trail; k >= 0; k--) {
+        const f = frame(fi - k); if (!f || !f.length) continue;
+        const a = k === 0 ? 1 : 0.5 * (1 - k / (trail + 1));
+        ctx.globalAlpha = ga * a; ctx.strokeStyle = c; ctx.lineWidth = (k === 0 ? 0.004 : 0.003) * base; ctx.shadowColor = c; ctx.shadowBlur = k === 0 ? 14 : 0;
+        ctx.beginPath(); for (let i = 0; i < f.length; i += 2) { const px = x + f[i] * sc, py = y - f[i + 1] * sc; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.stroke();
+      }
+    } else if (mode === 'spectrum') {
+      const f = frame(fi), n = f.length, bw = w / n, lo = d.dbMin ?? -80, hi = d.dbMax ?? 0;
+      const g = ctx.createLinearGradient(0, y + h / 2, 0, y - h / 2); g.addColorStop(0, c); g.addColorStop(1, col(p.peak || 'hot'));
+      ctx.fillStyle = g; ctx.shadowColor = c; ctx.shadowBlur = 8;
+      for (let i = 0; i < n; i++) { const v = S.clamp01((f[i] - lo) / (hi - lo)), bh = Math.max(2, v * h); rrect(x - w / 2 + i * bw + bw * 0.12, y + h / 2 - bh, bw * 0.76, bh, Math.min(4, bw / 3)); ctx.fill(); }
+      (d.ticks || []).forEach(([fx, lab]) => text(lab, x - w / 2 + fx * w, y + h / 2 + 0.03 * base, { size: LBL() * 0.9, font: 'Mono', color: 'dim' }));
+    } else {
+      const f = frame(fi); ctx.strokeStyle = c; ctx.lineWidth = 0.004 * base; ctx.shadowColor = c; ctx.shadowBlur = 10; ctx.beginPath();
+      for (let i = 0; i < f.length; i++) { const px = x - w / 2 + (i / (f.length - 1)) * w, py = y - f[i] * h / 2 * (p.gain || 1); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.stroke();
+    }
+    ctx.restore();
+    if (p.label) text(p.label, x, y + h / 2 + 0.06 * base, { size: LBL(), font: 'BodySB', color: 'dim', spacing: 0.004 * base });
+  },
+  // scale (E9 scale journey): nested levels, each a real size in metres (exp = log10 of its width); `z` is log10 of
+  // the frame width in metres and springs from beat to beat, so the camera zooms continuously through the levels.
+  // A level is drawn while it is between 1/400 and 6x the frame; a scale bar shows the current width.
+  scale(p, t) {
+    const z = p.z - 0.004 * t, base = Math.min(W, H), cx = p.x * W, cy = p.y * H;   // + a slow constant push-in (~1% a second): never parked
+    const px = (m) => (m / Math.pow(10, z)) * W;           // metres -> pixels at this zoom
+    const ga = ctx.globalAlpha;
+    (p.levels || []).forEach((L, i) => {
+      const size = px(Math.pow(10, L.exp)), lo = 0.0025 * W, hi = 6 * W;
+      if (size < lo || size > hi) return;
+      const vis = S.clamp01(Math.log10(size / lo) / 0.8) * S.clamp01(Math.log10(hi / size) / 0.6);
+      const ox = (L.dx || 0) * size, oy = (L.dy || 0) * size, c = col(L.color || (i === p.levels.length - 1 ? 'hot' : 'signal'));
+      ctx.save(); ctx.globalAlpha = ga * vis; ctx.strokeStyle = c; ctx.lineWidth = Math.max(1.5, 0.003 * base); ctx.shadowColor = c; ctx.shadowBlur = 8;
+      const X = cx + ox, Y = cy + oy, hw = size / 2, hh = size * (L.aspect || 1) / 2;
+      if (L.shape === 'circle') { ctx.beginPath(); ctx.arc(X, Y, hw, 0, 7); ctx.stroke(); }
+      else if (L.shape === 'grid') { const n = L.cells || 4;
+        const cellA = S.clamp01(Math.log10(0.5 * W / ((2 * hw) / n)) / 0.62);   // a cell: full up to 0.12 of the frame, gone at half
+        if (n === 1) ctx.globalAlpha = ga * vis * cellA;   // a one-cell level IS a cell (a row of pixels): it fades like one
+        ctx.strokeRect(X - hw, Y - hh, 2 * hw, 2 * hh);
+        // a grid's inner lines go sooner (full up to 0.08 of the frame, gone at 0.3): a zoom through a grid never drags its
+        // lines across the captions and readouts
+        const inA = n > 1 ? S.clamp01(Math.log10(0.3 * W / ((2 * hw) / n)) / 0.57) : cellA; ctx.globalAlpha = ga * vis * inA;
+        if (inA > 0.003) for (let k = 1; k < n; k++) { ctx.beginPath(); ctx.moveTo(X - hw + (2 * hw * k) / n, Y - hh); ctx.lineTo(X - hw + (2 * hw * k) / n, Y + hh); ctx.moveTo(X - hw, Y - hh + (2 * hh * k) / n); ctx.lineTo(X + hw, Y - hh + (2 * hh * k) / n); ctx.stroke(); } }
+      else if (L.shape === 'wave') { ctx.beginPath(); for (let k = 0; k <= 80; k++) { const u = k / 80; const xx = X - hw + 2 * hw * u, yy = Y - Math.sin(u * 2 * Math.PI * (L.cycles || 1)) * hh * 0.8; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); }
+      else { rrect(X - hw, Y - hh, 2 * hw, 2 * hh, Math.min(hw, hh) * (L.round || 0.06)); ctx.stroke(); }
+      if (size > 0.06 * W) text(L.label, X - hw + 0.012 * base, Y - hh - 0.028 * base, { size: LBL(), font: 'BodySB', color: L.color || 'text', align: 'left' });
+      ctx.restore();
+    });
+    // scale bar: the frame's width in real units
+    const m = Math.pow(10, z), units = [[1e3, 'km'], [1, 'm'], [1e-2, 'cm'], [1e-3, 'mm'], [1e-6, 'µm'], [1e-9, 'nm']];
+    const [u, un] = units.find(([v]) => m >= v * 0.999) || units[units.length - 1];
+    const val = m / u, nice = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].reverse().find((v) => v <= val * 0.3) || 0.2;
+    const bw = (nice * u / m) * W, bx = 0.07 * W, by = 0.78 * H;
+    ctx.save(); ctx.strokeStyle = col('text'); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(bx, by - 8); ctx.lineTo(bx, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by - 8); ctx.stroke(); ctx.restore();
+    text(`${nice} ${un}`, bx + bw / 2, by - 0.03 * base, { size: LBL() * 1.1, font: 'Mono', color: 'text' });
+  },
+  // knob: rotary control, value 0..1 (springs), label and value text
+  knob(p) {
+    const x = p.x * W, y = p.y * H, base = Math.min(W, H), r = (p.r || 0.06) * base, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25, a = a0 + (a1 - a0) * clamp(p.value);
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = r * 0.16; ctx.strokeStyle = hexA(col('dim'), 0.4); ctx.beginPath(); ctx.arc(x, y, r, a0, a1); ctx.stroke();
+    ctx.strokeStyle = col(p.color || 'signal'); ctx.shadowColor = col(p.color || 'signal'); ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(x, y, r, a0, a); ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.fillStyle = C.panel; ctx.beginPath(); ctx.arc(x, y, r * 0.72, 0, 7); ctx.fill(); ctx.strokeStyle = col('text'); ctx.lineWidth = r * 0.08; ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * r * 0.2, y + Math.sin(a) * r * 0.2); ctx.lineTo(x + Math.cos(a) * r * 0.62, y + Math.sin(a) * r * 0.62); ctx.stroke(); ctx.restore();
+    text(p.label || '', x, y + r * 1.55, { size: LBL(), font: 'BodySB', color: 'dim', spacing: 0.004 * base });
+    if (p.valueText != null || p.dB != null) text(p.valueText != null ? p.valueText : `${p.dB >= 0 ? '+' : ''}${fmt(p.dB, 0)} dB`, x, y - r * 1.45, { size: 0.036 * base, font: 'Mono', color: 'text' });
+  },
+  // image (E3 real-source card): the screenshot slides in, then a highlight box lands on the exact phrase and the
+  // camera pushes toward it. box = [x0, y0, x1, y1] as fractions of the image (from sourcecard.py)
+  image(p, t, life) {
+    const im = IMGS[p.src]; if (!im) return;
+    // crop = [top, bottom] band of the screenshot (fractions); box and rects are re-mapped into the band
+    const c0 = p.crop ? p.crop[0] : 0, c1 = p.crop ? p.crop[1] : 1, ry = (v) => (v - c0) / (c1 - c0);
+    const mapQ = (q) => [q[0], ry(q[1]), q[2], ry(q[3])];
+    if (p.crop) { p = Object.assign({}, p, { box: p.box && mapQ(p.box), rects: p.rects && p.rects.map(mapQ),
+                                             groups: p.groups && p.groups.map((g) => ({ ...g, rects: g.rects.map(mapQ) })) }); }
+    // highlight groups: [{rects, at}] (at = seconds after boxAt); without groups, rects/box form one group at 0
+    const groups = p.groups || [{ rects: p.rects || (p.box ? [p.box] : []), at: 0 }];
+    const base = Math.min(W, H), w = p.w * W, h = w * im.height * (c1 - c0) / im.width, cx = p.x * W, cy = p.y * H;
+    const boxAt = life.enter + (p.boxAt != null ? p.boxAt : 0.55);
+    const bwFrac = p.box ? (p.box[2] - p.box[0]) : 0.5, pmax = p.fill ? Math.min(3.5, Math.max(1, (p.fill * W) / (bwFrac * w))) : 1 + (p.push || 0.25);
+    const push = 1 + (pmax - 1) * S.clamp01(prog(t, boxAt + 0.1, timed('smooth', 1.6, 0.3)));
+    const bx = p.box ? (p.box[0] + p.box[2]) / 2 : 0.5, by = p.box ? (p.box[1] + p.box[3]) / 2 : 0.5;
+    ctx.save(); ctx.beginPath(); rrect(cx - w / 2, cy - h / 2, w, h, 0.012 * base); ctx.clip();
+    ctx.translate(cx, cy); ctx.scale(push, push); const fx = (bx - 0.5) * w * (1 - 1 / push), fy = (by - 0.5) * h * (1 - 1 / push);
+    ctx.translate(-fx, -fy); ctx.drawImage(im, 0, c0 * im.height, im.width, (c1 - c0) * im.height, -w / 2, -h / 2, w, h);
+    if (p.dim && (p.rects || p.box)) {                 // spotlight: the page dims around the highlighted lines
+      const da = p.dim * (0.45 + 0.55 * fade(t, boxAt)), pad = 0.006 * base;   // arrives half-dimmed, never a white flash
+      ctx.save(); ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h);
+      groups.filter((g) => t >= boxAt + (g.at || 0)).forEach((g) => g.rects.forEach((q) => ctx.rect(-w / 2 + q[0] * w - pad, -h / 2 + q[1] * h - pad, (q[2] - q[0]) * w + 2 * pad, (q[3] - q[1]) * h + 2 * pad)));
+      ctx.fillStyle = `rgba(0,0,0,${da})`; ctx.fill('evenodd'); ctx.restore();
+    }
+    groups.flatMap((g) => g.rects.map((q, li) => [q, boxAt + (g.at || 0) + 0.12 * li])).forEach(([bx4, at]) => {   // per line
+      const a = fade(t, at), k = 1 + 0.25 * (1 - S.clamp01(prog(t, at, 'snappy')));
+      const x0 = -w / 2 + bx4[0] * w, y0 = -h / 2 + bx4[1] * h, bw = (bx4[2] - bx4[0]) * w, bh = (bx4[3] - bx4[1]) * h, pad = 0.005 * base;
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(x0 + bw / 2, y0 + bh / 2); ctx.scale(k, k);
+      ctx.fillStyle = hexA(col('hot'), 0.2); ctx.strokeStyle = col('hot'); ctx.lineWidth = 0.004 * base;
+      rrect(-bw / 2 - pad, -bh / 2 - pad, bw + 2 * pad, bh + 2 * pad, pad); ctx.fill(); ctx.stroke(); ctx.restore();
+    });
+    ctx.restore();
+    ctx.save(); ctx.strokeStyle = hexA(col('dim'), 0.6); ctx.lineWidth = 2; rrect(cx - w / 2, cy - h / 2, w, h, 0.012 * base); ctx.stroke(); ctx.restore();
+    if (p.credit) text(p.credit, cx + w / 2, cy + h / 2 + 0.028 * base, { size: 0.02 * base, font: 'Mono', color: 'dim', align: 'right' });
+  },
+};
+
+// ---- frame ----------------------------------------------------------------------------------------------------------
+function captions(t) {
+  const b = B.beats.find((x) => t >= x.t0 && t < x.t1); if (!b || !b.say) return;
+  const words = b.words || [], base = Math.min(W, H), size = (PORTRAIT ? 0.058 : 0.046) * base;
+  const zoneY = (PORTRAIT ? 0.80 : 0.875) * H, maxW = (PORTRAIT ? 0.86 : 0.78) * W;
+  ctx.save(); ctx.font = `${size}px BodySB`;
+  const sp = ctx.measureText(' ').width, lines = [[]]; let lw = 0;
+  const kp = size * 0.24;                          // a key word gets its own room for the box on both sides
+  words.forEach((wd) => { const ww = ctx.measureText(wd.w).width, pad = wd.key ? kp : 0; if (lw + ww + 2 * pad > maxW && lines[lines.length - 1].length) { lines.push([]); lw = 0; } lines[lines.length - 1].push({ ...wd, ww, pad }); lw += ww + 2 * pad + sp; });
+  const lh = size * 1.3, top = zoneY - (lines.length - 1) * lh / 2;
+  const lastS = words.length ? words[words.length - 1].s : b.t0;
+  const exit = 1 - fade(t, Math.max(b.t1 - 0.12, lastS + 0.3), 'ui');   // the last word is always readable
+  lines.forEach((ln, li) => {
+    const tw = ln.reduce((s, x) => s + x.ww + 2 * x.pad, 0) + sp * (ln.length - 1); let x = W / 2 - tw / 2;
+    ln.forEach((wd) => {
+      x += wd.pad;
+      const a = fade(t, wd.s - 0.06, 'smooth') * exit, dy = (1 - prog(t, wd.s - 0.06, 'snappy')) * size * 0.35, y = top + li * lh + dy;
+      if (a > 0.003) {
+        if (wd.key) {
+          const k = fade(t, wd.s, 'snappy'); ctx.save(); ctx.globalAlpha = a * k; ctx.strokeStyle = col('key'); ctx.lineWidth = 4; ctx.fillStyle = hexA(col('key'), 0.16);
+          rrect(x - size * 0.18, y - size * 0.66, wd.ww + size * 0.36, size * 1.25, size * 0.2); ctx.fill(); ctx.stroke(); ctx.restore();
+        }
+        ctx.globalAlpha = a; ctx.fillStyle = wd.key ? col('key') : C.text; ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = size * 0.15; ctx.fillText(wd.w, x, y);
+      }
+      x += wd.ww + wd.pad + sp;
+    });
+  });
+  ctx.restore();
+}
+
+window.frameAt = function (t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const g = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, Math.max(W, H) * 0.75);
+  g.addColorStop(0, C.bg2); g.addColorStop(1, C.bg); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const [dx, dy] = S.handheld(t, 0.006 * Math.min(W, H), 0.22, 7);   // the stage drifts (>= ~0.3 px a frame): never frozen
+  ctx.save(); ctx.translate(dx, dy);
+  const live = LIVES.filter((L) => t >= L.enter && t < L.exit + 0.6).map((L) => [L, params(L, t)]);
+  const byId = {}; live.forEach(([L, p]) => (byId[L.id] = p));
+  for (const [L, p] of live) {
+    if (p.fromKnob && byId[p.fromKnob.id]) {         // a readout tied to a knob: value = base x 10^(dB/20), same clock
+      const kn = byId[p.fromKnob.id]; p.value = p.fromKnob.base * Math.pow(10, (kn.dB || 0) / 20);
+      if (p.fromKnob.hotAbove != null) p.hot = p.value > p.fromKnob.hotAbove ? 'hot' : null;
+    }
+    const life = { enter: L.enter, age: t - L.enter, first: L.first, keys: L.keys };
+    const ain = fade(t, L.enter), yin = (1 - prog(t, L.enter, 'snappy')) * 0.035 * H;
+    const aout = t >= L.exit ? 1 - fade(t, L.exit, timed('smooth', EXIT_S)) : 1, yout = t >= L.exit ? -0.02 * H * fade(t, L.exit, timed('smooth', EXIT_S)) : 0;
+    const a = ain * aout; if (a <= 0.002) continue;
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(0, yin + yout); DRAW[L.type](p, t, life); ctx.restore();
+  }
+  ctx.restore();
+  captions(t);
+  grain(t);
+  return ctx.canvas.toDataURL('image/png');
+};
+// soft film grain (deterministic: 4 noise tiles at half size, one per frame in a fixed order, laid on with 'overlay'):
+// keeps gradients from banding and a held frame from being a pixel copy of the last one
+let GRAIN = null;
+function grain(t) {
+  if (cfg.grain === 0) return;
+  if (!GRAIN) {
+    GRAIN = []; let seed = 7654321;
+    const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
+    for (let k = 0; k < 4; k++) {
+      const c = document.createElement('canvas'); c.width = W / 2; c.height = H / 2;
+      const x = c.getContext('2d'), d = x.createImageData(c.width, c.height);
+      for (let i = 0; i < d.data.length; i += 4) { const g = 128 + 9 * (rnd() + rnd() + rnd() - 1.5) * 2; d.data[i] = d.data[i + 1] = d.data[i + 2] = g; d.data[i + 3] = 255; }
+      x.putImageData(d, 0, 0); GRAIN.push(c);
+    }
+  }
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = cfg.grain || 0.5;
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(GRAIN[((Math.round(t * 29.97) % 4) + 4) % 4], 0, 0, W, H); ctx.restore();
+}
+window.ready = true;
+</script></body></html>
