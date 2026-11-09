@@ -279,7 +279,7 @@ def draw_base(bbox, z, ox, oy, size, P, source, s):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="O6 map route draw-on (OpenStreetMap)")
+    ap = argparse.ArgumentParser(description="map route draw-on (OpenStreetMap)")
     ap.add_argument("gpx", nargs="?"); ap.add_argument("--out"); ap.add_argument("--name", default="route")
     ap.add_argument("--dur", type=float, default=7.0); ap.add_argument("--labels", help="'Start|Finish' names for the ends")
     ap.add_argument("--fps", type=float, default=29.97); ap.add_argument("--size", default="1920x1080"); ap.add_argument("--frames")

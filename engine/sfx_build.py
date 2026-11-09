@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthesize a beat-synced build -> impact -> sub drop (no samples, no licence).
+"""Synthesize a beat-synced build -> impact -> sub drop (no samples, no license).
 sfx_build.py <out.wav> --bpm 152 --beats 8 --tail 2.2
 The file starts `beats` beats before the hit (hit time inside the file = beats*60/bpm) and runs `tail` s after it.
 Build: snare roll that doubles each bar (quarters, eighths, sixteenths, 32nds) rising -14 -> -2 dB, plus a

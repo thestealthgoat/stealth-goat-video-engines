@@ -13,7 +13,7 @@ It runs fully local; only `--url` loads web pages (to screenshot them).
 
 Every scene uses the same light: a warm key that casts real shadows onto a shadow-catcher floor, a cool rim, a
 soft fill, and a contact shadow under each object. The camera never stops (slow dolly plus hand-held drift).
-Colours and fonts come from the profile (`head`, `body`, `body_semibold`; `mono` if present); headings are set in
+Colors and fonts come from the profile (`head`, `body`, `body_semibold`; `mono` if present); headings are set in
 capitals when the profile has `"explain": {"head_caps": true}`.
 
 ## Outputs
@@ -33,10 +33,10 @@ capitals when the profile has `"explain": {"head_caps": true}`.
 | `data` | `--data file.json` or a `label,value` CSV | bars grow and count up (top value in the accent), score cards flip in and count up, a map grid draws on with value columns (labels on the top 3) and a point cloud; the camera travels section to section (4.6 s each) |
 | `orbit` | `--matte out/m/<name>_matte.json` (from `engine/matte.py`), `--cards "A\|B\|C"` | frosted glass cards orbit the presenter's head and pass behind and in front of them; length = the matte window; size = the plate's |
 | `stack` | `--shots a.png,b.png` or `--url https://... [--url ...]` (`--shot-size 390x844` for phone) | screenshot cards drop in, fan out in depth, the first lifts to camera |
-| `burst` | `--lines "A\|B\|C"` | mesh gradient from the profile colours; each title swaps behind a light burst (1.8 s a line); cuts printed |
+| `burst` | `--lines "A\|B\|C"` | mesh gradient from the profile colors; each title swaps behind a light burst (1.8 s a line); cuts printed |
 | `badge` | `--text1 "A" --text2 "B"` | two badges fly in and clash at about 1.0 s (the piece's one slam: recoil, sparks, burst, shake) |
 | `toggle` | `--labels "A\|B\|C"` | a settings panel; switches flip on, off, on with UI springs, staggered |
-| `props` | `--icons check,star,heart,bolt,play,plus,pin,chat` | extruded, bevelled glossy icons pop in and float; use `--alpha` over footage |
+| `props` | `--icons check,star,heart,bolt,play,plus,pin,chat` | extruded, beveled glossy icons pop in and float; use `--alpha` over footage |
 | `reveal` | `--shots` (first = phone screen, then panels) or `--panels "A\|B"`, `--toast "..."`, `--tagline "..."` | brand glow, phone rises, panels slide out, a toast drops, tagline word by word |
 | `hop` | `--text "the words"`, timing from `--words words.json` or `--chart` or `--wpm 110`, `--character art.png` | a mascot (placeholder bean without art) hops platform to platform; each word lights on its landing |
 | `fly` | `--shots app.png`, `--focus` JSON `[{"x":0.1,"y":0.2,"w":0.3,"h":0.2,"label":"Search"}]` (fractions, file or inline) | the camera flies over a tilted screenshot to each region (glow outline + callout), then pulls back |
@@ -71,7 +71,7 @@ JSON, one or more sections:
 | `per` | `data` (4.6), `burst` (1.8), `fly` (2.2) | seconds per section / line / focus |
 | `light` | all | `{"warm": "#FFD6A8", "cool": "#9EC2FF", "key": 2.6, "rim": 2.2}` |
 | `flips` | `toggle` | switch flip times (`[0.8, 2.4, 3.0]`, staggered 0.22 s per switch) |
-| `centre`, `rx`, `ry`, `period`, `tilt` | `orbit` | orbit centre (found from the cut-out), radii, seconds per turn (9), tilt |
+| `centre`, `rx`, `ry`, `period`, `tilt` | `orbit` | orbit center (found from the cut-out), radii, seconds per turn (9), tilt |
 | `minDist` | `fly` | how close the camera may get (9; raise it if a small screenshot looks soft) |
 
 ## Example commands (demo profile)

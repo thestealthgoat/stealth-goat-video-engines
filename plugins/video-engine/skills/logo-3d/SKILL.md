@@ -1,13 +1,13 @@
 ---
 name: logo-3d
-description: Turns any SVG logo into 3D with the local video engine (logo/render3d.py, three.js extrusion in headless Chromium) - transparent 4K hero and front stills, a seamless swing or spin loop as ProRes 4444 alpha .mov plus an MP4, and a Draco-compressed GLB model - every colour kept, layered artwork raised in steps, greys rendered as metal. Use when the user says "3D version of our logo", "make our logo 3D", "extrude this logo", "spinning logo", "logo loop for the stream", "logo turntable", "3D logo for a thumbnail", "GLB of our logo" or "3D logo for Blender".
+description: Turns any SVG logo into 3D with the local video engine (logo/render3d.py, three.js extrusion in headless Chromium) - transparent 4K hero and front stills, a seamless swing or spin loop as ProRes 4444 alpha .mov plus an MP4, and a Draco-compressed GLB model - every color kept, layered artwork raised in steps, grays rendered as metal. Use when the user says "3D version of our logo", "make our logo 3D", "extrude this logo", "spinning logo", "logo loop for the stream", "logo turntable", "3D logo for a thumbnail", "GLB of our logo" or "3D logo for Blender".
 ---
 
 # Logo 3D
 
 Make 3D versions of a logo with `logo/render3d.py` in the engine folder. It loads an SVG with three.js `SVGLoader`,
-extrudes every filled path (the same approach as the open-source 3dsvg project, MIT), keeps each fill's own colour,
-raises stacked artwork in small steps (a new layer each time the fill colour changes) and renders neutral greys as
+extrudes every filled path (the same approach as the open-source 3dsvg project, MIT), keeps each fill's own color,
+raises stacked artwork in small steps (a new layer each time the fill color changes) and renders neutral grays as
 brushed metal. Everything runs locally; nothing is uploaded.
 
 Options, outputs, timings and fixes are in [references/render3d.md](references/render3d.md). Read it before changing
@@ -28,7 +28,7 @@ a default.
   `python3 engine/vprofile.py new demo --display "Demo" --primary "#0B3D2E" --accent "#F2B705" --sample`.
 - Check the profile when in doubt: `python3 engine/vprofile.py show <name> --check`. The demo profile ends
   `CHECK: OK` on a fresh machine (its working folders are optional). A user's own profile may report
-  `CHECK: missing` for `paths` folders that don't exist yet; logo-3d uses none of them, so only colour and font
+  `CHECK: missing` for `paths` folders that don't exist yet; logo-3d uses none of them, so only color and font
   errors matter here.
 
 ## 1. Get a vector
@@ -52,11 +52,11 @@ python3 logo/preview.py out/logo3d/check.png out/logo3d/ACME_Mark_3D_Hero_4K.png
 ```
 
 `render3d.py` prints `paths N` (the number of filled shapes it extruded), and a line when `--drop-bg` dropped a
-background. `preview.py` composites each transparent still on the profile's primary colour and stacks them into one
+background. `preview.py` composites each transparent still on the profile's primary color and stacks them into one
 1280-wide sheet. `Read` the sheet and check:
 
-- **Colours**: every colour of the logo is there and nothing has collapsed into one colour. A part whose colour
-  equals the profile's primary colour disappears into the preview background; composite on a contrasting colour
+- **Colors**: every color of the logo is there and nothing has collapsed into one color. A part whose color
+  equals the profile's primary color disappears into the preview background; composite on a contrasting color
   as well:
   ```bash
   python3 -c "from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('RGBA');b=Image.new('RGBA',im.size,sys.argv[2]);b.alpha_composite(im);b.convert('RGB').resize((1280,720)).save(sys.argv[3])" out/logo3d/ACME_Mark_3D_Hero_4K.png '#FFFFFF' out/logo3d/hero_on_white.png
@@ -65,14 +65,14 @@ background. `preview.py` composites each transparent still on the profile's prim
   and lettering, `0.05` for a chunky single mark.
 - **Framing**: nothing is clipped at the frame edge (`--fill` is the share of the frame the widest side fills,
   default 0.78), and the hero angle reads well (`--hero "rx,ry"` in radians, default `"0.10,-0.30"`).
-- **Background plate**: if a white or coloured rectangle fills the whole canvas behind the logo, it is an export
+- **Background plate**: if a white or colored rectangle fills the whole canvas behind the logo, it is an export
   background; rerun with `--drop-bg`. Leave it on for a square badge or a traced silhouette that is part of the logo.
 
 Fix and rerun the stills until they are right.
 
 ### Worked example (fresh clone, demo profile)
 
-No logo needed: write a small three-colour mark and render it.
+No logo needed: write a small three-color mark and render it.
 
 ```bash
 cd "$VIDEO_ENGINE" && mkdir -p out/logo3d
@@ -88,10 +88,10 @@ python3 logo/preview.py out/logo3d/check.png out/logo3d/ACME_Mark_3D_Hero_4K.png
 ```
 
 Expected: `paths 3`, then `ACME_Mark_3D_Hero_4K.png`, `ACME_Mark_3D_Front_4K.png` and `ACME_Mark_3D.glb` in
-`out/logo3d/`. The grey bar renders as metal. A new layer starts at each fill-colour change, so yellow is layer 0,
-green layer 1 and grey layer 2: the grey bar sits one step in front of the green triangle it rests on (two above the
+`out/logo3d/`. The gray bar renders as metal. A new layer starts at each fill-color change, so yellow is layer 0,
+green layer 1 and gray layer 2: the gray bar sits one step in front of the green triangle it rests on (two above the
 yellow). The green inner triangle matches
-the demo profile's primary colour, so it vanishes in `check.png`: this is the case the contrasting composite above
+the demo profile's primary color, so it vanishes in `check.png`: this is the case the contrasting composite above
 is for.
 
 ## 3. Full render (under a minute for simple marks, several minutes for detailed traced logos)
@@ -101,7 +101,7 @@ python3 logo/render3d.py path/to/logo.svg out/logo3d ACME_Mark --profile demo --
 ```
 
 - `--bg` sets the MP4 background only (with or without `#`; quote it, `#` starts a shell comment). Default: the
-  profile's primary colour. Pick a colour the logo reads on: a dark brand colour for light logos, white for dark ones.
+  profile's primary color. Pick a color the logo reads on: a dark brand color for light logos, white for dark ones.
   Every PNG and the .mov stay transparent.
 - The default loop is **swing**: a seamless sway of about +/-25 degrees with a slight nod, so the logo is never seen
   backwards. Use `--anim spin` (a full turn) only when the user asks for it. Loop length is `--spin-seconds`
@@ -119,7 +119,7 @@ python3 logo/render3d.py path/to/logo.svg out/logo3d ACME_Mark --profile demo --
    ```bash
    ffmpeg -nostdin -v error -y -i out/logo3d/ACME_Mark_3D_Swing.mp4 -vf "select='not(mod(n,30))',scale=640:-1,tile=4x2" -frames:v 1 out/logo3d/loop_tiles.png
    ```
-   Look for clipping at the extremes of the sway, a face going dark, and colours that change between frames.
+   Look for clipping at the extremes of the sway, a face going dark, and colors that change between frames.
 2. Run the **video-gates** QA run before showing or delivering anything:
    ```bash
    python3 engine/qa.py out/logo3d/ACME_Mark_3D_Swing.mp4 --profile demo --kind loop --cuts none --fps 60 --out out/logo3d/qa_ACME_Mark
@@ -139,7 +139,7 @@ Name files `<Owner>_<Logo>` (for example `ACME_Mark`) so a set sorts together. O
 |---|---|
 | `<Name>_3D_Hero_4K.png`, `<Name>_3D_Front_4K.png` | 3840x2160 transparent stills: thumbnails, graphics, print |
 | `<Name>_3D_Swing_Alpha.mov` | 1920x1080 60 fps ProRes 4444 with alpha: overlays and stingers in vMix, Premiere, Resolve |
-| `<Name>_3D_Swing.mp4` | the same loop on the `--bg` colour, H.264: social and web |
+| `<Name>_3D_Swing.mp4` | the same loop on the `--bg` color, H.264: social and web |
 | `<Name>_3D.glb` | Draco-compressed 3D model: Blender, After Effects, a web page |
 
 With `--anim spin` the loop files are `<Name>_3D_Spin_Alpha.mov` and `<Name>_3D_Spin.mp4`.

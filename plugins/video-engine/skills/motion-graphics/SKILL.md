@@ -5,7 +5,7 @@ description: Makes brand-styled overlays, cards and 3D card scenes with the open
 
 # Motion graphics: overlays, cards and 3D card scenes
 
-Graphics that sit on footage or stand alone as short motion pieces. Every colour, font and logo comes from the
+Graphics that sit on footage or stand alone as short motion pieces. Every color, font and logo comes from the
 brand profile; every move is a spring (`engine/spring.py` / `engine/spring.js`): no fixed eases, opacity never
 overshoots. Logo animation belongs to the **logo-motion** skill, full explainers to **explain**, person cut-outs to
 **matte**, the final check to **video-gates**.
@@ -15,8 +15,8 @@ overshoots. Logo animation belongs to the **logo-motion** skill, full explainers
 1. Use `$VIDEO_ENGINE` as the engine folder (a clone of
    https://github.com/thestealthgoat/stealth-goat-video-engines). If it is unset, ask the user where the engine is,
    or run the **getting-started** skill to install it (directly: `git clone
-   https://github.com/thestealthgoat/stealth-goat-video-engines && cd stealth-goat-video-engines && ./setup.sh`,
-   then `export VIDEO_ENGINE="$PWD"`; `setup.sh` targets macOS with Homebrew). Run every command from there:
+   https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine && cd ~/video-engine && ./setup.sh`,
+   then `export VIDEO_ENGINE="$HOME/video-engine"`; `setup.sh` targets macOS with Homebrew). Run every command from there:
    `cd "$VIDEO_ENGINE" && python3 engine/<tool>.py ...`.
 2. Pass `--profile <name>` on every command (else the tools fall back to `$VIDEO_PROFILE`, then `local.json`).
    Use the user's own profile when they have one (`python3 engine/vprofile.py list`); use `demo` to try things.
@@ -47,7 +47,7 @@ Every stage3d scene, the `--data` format and `--spec` keys: [references/stage3d-
 1. **Confirm the words.** Spell names, numbers and quotes back to the user before rendering. Never invent a stat or
    put words in a real person's mouth: quotes and stats come from the user or the footage.
 2. **Stills first.** Every tool takes `--frames t1,t2,...` and writes only those stills (seconds). Look at them:
-   spelling, safe area, brand colours and fonts, nothing over a face, text readable at phone size.
+   spelling, safe area, brand colors and fonts, nothing over a face, text readable at phone size.
 3. **Render.** One heavy render at a time (stage3d, matte and behind are heavy; run long ones in the background and
    do not start a second). quote, progressbar, beforeafter, sketch, routemap and stage3d end with a `(qa: ...)`
    hint; keep it. statcard (last line `DONE <base>`) and behind print none: use the qa calls in section 4.
@@ -135,11 +135,11 @@ python3 engine/progressbar.py out/mg/sample.mp4 --out out/mg --name demo --face 
 Use a real headshot or cut-out for `--face`, or `--matte <name>_matte.json` to take the face from a matte. Chapters
 are `[{"t": seconds, "title": "..."}]` in the video's own time; `--t0/--t1` limit the window. It renders at the
 video's frame rate: pass `--fps` with the profile's rate when the source differs. Lay `_progress_Alpha.mov` over
-the programme. QA the MP4 (the printed hint is only `--cuts none`):
+the program. QA the MP4 (the printed hint is only `--cuts none`):
 ```bash
 python3 engine/qa.py out/mg/demo_progress.mp4 --profile demo --kind edit --cuts none --intended hook --out out/mg/qa_progress
 ```
-`--intended hook` is needed: the bar rides a programme and has no hook of its own, so the "strong moment by 2 s"
+`--intended hook` is needed: the bar rides a program and has no hook of its own, so the "strong moment by 2 s"
 gate fails (biggest move about 6%). With it, expect `RESULT: PASS (0 warnings, 1 declared intended)`.
 
 ### Before / after (beforeafter)
@@ -177,7 +177,7 @@ python3 engine/routemap.py --gpx-from-videos "footage/*.MOV" --gpx-out out/mg/tr
 ```
 `--map naturalearth` (default, public-domain layers, regional scale) or `--map osm` (city scale). Tell the user this
 downloads public map data once into `_cache/` (Natural Earth is about 23 MB; or OpenStreetMap via the Overpass
-API); nothing of theirs is uploaded, and the map credit stays on screen as the licence requires. Drop `--frames`
+API); nothing of theirs is uploaded, and the map credit stays on screen as the license requires. Drop `--frames`
 to render, then QA with the printed hint (expect `RESULT: PASS`):
 ```bash
 python3 engine/qa.py out/mg/demo_route.mp4 --profile demo --kind motion --cuts none --holds end:1.0 --out out/mg/qa_route
@@ -215,7 +215,7 @@ them in the profile under `talkedit.pops` (`per_min`, `min_gap_s`, `triggers: {"
 
 ## 6. Rules
 
-- Brand only from the profile. Do not hard-code colours or fonts in commands; if a look is wrong, fix the profile.
+- Brand only from the profile. Do not hard-code colors or fonts in commands; if a look is wrong, fix the profile.
 - One big spring moment per piece at most (a badge clash, a quote mark landing); everything else stays calm.
 - Keep text inside the profile's safe area and off faces; check the stills, then the qa sheet.
 - Free and local by default: the matte and cut-outs run BiRefNet through rembg on the user's machine (models folder:

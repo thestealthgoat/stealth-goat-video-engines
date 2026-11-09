@@ -78,7 +78,7 @@ HIDE_OVERLAYS_JS = r"""
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="E3 real-source card: screenshot + exact-phrase box")
+    ap = argparse.ArgumentParser(description="real-source card: screenshot + exact-phrase box")
     ap.add_argument("src"); ap.add_argument("phrase"); ap.add_argument("out")
     ap.add_argument("--width", type=int, default=1280); ap.add_argument("--height", type=int, default=760)
     ap.add_argument("--context", type=float, default=0.55, help="where the phrase sits vertically in the crop (0-1)")

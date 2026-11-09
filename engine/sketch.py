@@ -49,7 +49,7 @@ def strokes(img):
 
 def main(argv=None):
     import cv2
-    ap = argparse.ArgumentParser(description="T5 sketch -> real shot")
+    ap = argparse.ArgumentParser(description="sketch -> real shot")
     ap.add_argument("src"); ap.add_argument("--out", required=True); ap.add_argument("--name", default="sketch")
     ap.add_argument("--t0", type=float, default=0.0); ap.add_argument("--dur", type=float, default=6.0)
     ap.add_argument("--draw", type=float, default=2.2); ap.add_argument("--fps", type=float, default=29.97)

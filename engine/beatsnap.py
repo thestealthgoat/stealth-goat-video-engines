@@ -10,8 +10,8 @@ of music stops. If the bar map cannot be built here, beatsnap prints a note and 
 and sit at onset-envelope peaks, so measured against the bar map they run about 40-50 ms late and wander by +/-20 ms
 (on two reference tracks). In that mode E['beats']['bpm'] is the coarse bin (e.g. 123.05 for a 120 BPM track) and
 E['beats']['bpm_measured'] the tempo engine/beatmap.py measures (left out when beatmap cannot run); neither is read
-by any renderer. The legacy mode analyses 300 s from the music in point, or longer when the edit needs more (then
-end of the reel + --max-shift per cut + 10 s); edits that fit in 300 s are analysed exactly as before.
+by any renderer. The legacy mode analyzes 300 s from the music in point, or longer when the edit needs more (then
+end of the reel + --max-shift per cut + 10 s); edits that fit in 300 s are analyzed exactly as before.
 
 Bar map mode (engine/beatmap.py): the default (= --barmap auto, computed here), or --barmap <beatmap.json>.
   beatsnap.py edit.json music.mp3 --open 1.8 --barmap auto [--big-key card.td] [--payoff 9]

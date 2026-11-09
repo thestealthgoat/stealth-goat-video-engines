@@ -17,6 +17,7 @@ resources/models/*.pb
 profiles/*/sample_card.png
 # your own work stays out of the engine's git
 /sites/
+/packs/
 /REFERENCE_IDEAS.md
 **/_build/
 examples/**/vo.*

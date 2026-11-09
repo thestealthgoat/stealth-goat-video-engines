@@ -1,6 +1,6 @@
 ---
 name: getting-started
-description: Sets up the open-source video engine for the first time and gives a ten-minute guided tour. Clones the engine from GitHub, runs setup.sh (macOS + Homebrew), sets VIDEO_ENGINE, builds the user's own brand profile (colours, OFL fonts, logo SVG) and checks it on a brand card, then renders a logo intro, a stats lower third, a QA run and an explainer on the demo profile, and ends with a map of which skill does what. Use when the user says "set up the video engine", "install the video engine", "get started with the video engine", "first time setup", "make a brand profile", "add my brand / colours / logo", "show me what this can do", "give me a tour", "where is the engine", or when another video skill finds $VIDEO_ENGINE unset or the engine folder missing.
+description: Sets up the open-source video engine for the first time and gives a ten-minute guided tour. Clones the engine from GitHub, runs setup.sh (macOS + Homebrew), sets VIDEO_ENGINE, builds the user's own brand profile (colors, OFL fonts, logo SVG) and checks it on a brand card, then renders a logo intro, a stats lower third, a QA run and an explainer on the demo profile, and ends with a map of which skill does what. Use when the user says "set up the video engine", "install the video engine", "get started with the video engine", "first time setup", "make a brand profile", "add my brand / colors / logo", "show me what this can do", "give me a tour", "where is the engine", or when another video skill finds $VIDEO_ENGINE unset or the engine folder missing.
 ---
 
 # Getting started with the video engine
@@ -52,7 +52,7 @@ cd ~/video-engine && ls
 ```
 
 `profiles/` holds `_template` (the copy source for new profiles) and `demo` (the tour's profile: Anton and Barlow
-Condensed with their OFL licences beside them, and a sample logo PNG).
+Condensed with their OFL licenses beside them, and a sample logo PNG).
 
 If git is missing, macOS offers to install the Command Line Tools on the first `git` call; let the user accept that
 dialog themselves.
@@ -111,11 +111,11 @@ shell picks them up.
 ## 4. Make the user's brand profile
 
 A profile is one file, `profiles/<name>/profile.json`, copied from `profiles/_template/profile.json`. Ask the user
-for: a short profile name (lowercase, no spaces, e.g. `acme`), the display name, two brand colours (primary = the
-ground of panels and bars, accent = the edge and highlight colour) as hex, a headline font and a body font, and
+for: a short profile name (lowercase, no spaces, e.g. `acme`), the display name, two brand colors (primary = the
+ground of panels and bars, accent = the edge and highlight color) as hex, a headline font and a body font, and
 their logo as an SVG.
 
-- Fonts: open-licence (OFL) only, so renders can be shared. Several ship in `resources/fonts/` with their licence
+- Fonts: open-license (OFL) only, so renders can be shared. Several ship in `resources/fonts/` with their license
   texts (`ls resources/fonts`); any Google Fonts family is OFL too. If the user names a commercial font, say why it
   is a problem and offer the closest OFL face.
 - Logo: an SVG. If they only have a JPG or PNG, use the logo-vectorize skill first. Tools that draw a raster logo
@@ -137,9 +137,9 @@ values, is in [references/brand-profile.md](references/brand-profile.md). Fix an
 missing (a folder: `mkdir -p` it; a font or logo: correct the path).
 
 Open the brand card and look at it with the user before anyone renders with the profile: the logo is drawn, every
-colour swatch shows its contrast, every font role renders (a font that fails is printed in red), and the sample lower
+color swatch shows its contrast, every font role renders (a font that fails is printed in red), and the sample lower
 third says `text on primary N:1` with no `(below 4.5:1)` warning. If the contrast is low, suggest a darker primary or
-a different text colour.
+a different text color.
 
 ## 5. Choose the default profile
 
@@ -170,7 +170,7 @@ python3 engine/vprofile.py list        # check `demo` is listed (tour.md says wh
    python3 logo/motion.py "$T/acme.svg" "$T" ACME intro --profile demo
    ```
    Writes `ACME_intro_Alpha.mov` (ProRes 4444 with alpha, for an editor) and `ACME_intro.mp4` (preview on the
-   profile's primary colour). Other templates: `outro`, `bug`, `stinger`, `presented`, `lockup`, `writeon`, `swap`,
+   profile's primary color). Other templates: `outro`, `bug`, `stinger`, `presented`, `lockup`, `writeon`, `swap`,
    `shatter` and more (the logo-motion skill).
 2. **Stats lower third** (motion-graphics skill), from the sample stats file that ships in `docs/`:
    ```bash
@@ -202,7 +202,7 @@ python3 engine/vprofile.py list        # check `demo` is listed (tour.md says wh
    ```
    The board (`lissajous_board.jpg`) is the approval step before the full render. The full render takes about
    three minutes; its QA should end `RESULT: PASS`. The docstring adds `--music-db -10`; leave it out here, because
-   with no voice-over the bed is the whole programme and is levelled to the profile loudness anyway (explain.py's own
+   with no voice-over the bed is the whole program and is leveled to the profile loudness anyway (explain.py's own
    help says `--music-db` then has no effect). `VO_SCRIPT.md` in the same folder is the voice-over script, for when
    the user wants to record their own voice.
 

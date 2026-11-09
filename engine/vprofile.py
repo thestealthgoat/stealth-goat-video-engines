@@ -219,6 +219,19 @@ def load(name=None):
 
 
 # ---- CLI ---------------------------------------------------------------------------------------------------
+def font_licence(font):
+    """The licence file for a font: OFL*.txt / LICENSE* beside it, or resources/fonts/OFL-<Family>.txt (matched on the
+    start of the file name, e.g. BarlowCondensed-Bold.ttf -> OFL-Barlow.txt)."""
+    import glob
+    here = os.path.dirname(os.path.abspath(font)); fam = os.path.basename(font).split("-")[0].split(".")[0]
+    for d in (here, os.path.join(REPO, "resources", "fonts")):
+        for c in sorted(glob.glob(os.path.join(d, "OFL*.txt")) + glob.glob(os.path.join(d, "LICEN[CS]E*"))):
+            tag = os.path.splitext(os.path.basename(c))[0].split("-", 1)[-1]
+            if d == here and tag.upper() in ("OFL", "LICENSE", "LICENCE"): return c
+            if tag and tag.upper() not in ("OFL", "LICENSE", "LICENCE") and fam.lower().startswith(tag.lower()): return c
+    return None
+
+
 def _new(a):
     folder = os.path.join(PROFILES, a.name)
     if os.path.exists(folder):
@@ -235,6 +248,8 @@ def _new(a):
             dst = os.path.join("assets", os.path.basename(src))
             import shutil; shutil.copy2(src, os.path.join(folder, dst))
             data["brand"]["fonts"][role] = dst
+            lic = font_licence(src)               # an OFL font ships with its licence beside it
+            if lic: shutil.copy2(lic, os.path.join(folder, "assets", os.path.basename(lic)))
     if a.logo:
         import shutil; dst = os.path.join("assets", os.path.basename(a.logo))
         shutil.copy2(a.logo, os.path.join(folder, dst))

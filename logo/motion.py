@@ -9,24 +9,24 @@ templates: slam (2 s or --dur, lands in --place) · intro (4 s) · outro (6 s en
            stinger (1.2 s, full-frame wipe, cut point printed) · presented (5 s lower third, text1 + --sponsor) ·
            lockup (4.17 s full-frame: camera settles onto a lit sign, text1 small top line, text2 outlined headline,
            text3 spaced subline, measured flicker-on; --plate puts a background still under it, else a drawn sign) ·
-           writeon (4.5 s or --dur, L1 signature write-on: a glowing pen traces the logo's outlines, then its fills fade in;
+           writeon (4.5 s or --dur, signature write-on: a glowing pen traces the logo's outlines, then its fills fade in;
            --write SECONDS pen time, default 48% of the length up to 2.2 s; the fills land as a hit at 0.86 x --write,
            printed as "hit at" for qa --cuts; text1 optional line under it; --place works) ·
-           morph (3.6 s, L3: circles float in and morph into each part of the mark; hit printed) ·
-           pixelbuild (3.4 s, L9: a dot grid springs out from the centre into the logo, glows, resolves; hit printed) ·
-           linebuild (7.5 s, L2: outline pieces converge, fills land, then construction grid -> profile page (text1 =
+           morph (3.6 s: circles float in and morph into each part of the mark; hit printed) ·
+           pixelbuild (3.4 s: a dot grid springs out from the center into the logo, glows, resolves; hit printed) ·
+           linebuild (7.5 s: outline pieces converge, fills land, then construction grid -> profile page (text1 =
            the name, default the profile's display name) -> pressed into fabric) ·
-           echo (1.2 s L4 outline stinger, cut printed) · lightstreak (3.5 s L10, hit printed) ·
-           lightpaint (S1: the SVG's top-level <g> groups are scenes drawn in turn by one light; 2.4 s a scene + 0.8 s, hit printed) ·
-           swap (L5 kinetic word swaps: --text1 "___ is next" --text2 "faster|bolder|yours"; 0.9 s a word + 1.5 s) ·
-           shatter (3.2 s L7: the mark shatters and re-forms as --svg2 / --text2; hit printed) ·
-           brandgrid (5 s L8: logo, colours, type, a stat counting up: --text1 label --text2 value)
---finish dark [--mockup laptop]: F1 cinematic finish on any template (opaque output; profile finish.dark settings).
+           echo (1.2 s outline stinger, cut printed) · lightstreak (3.5 s, hit printed) ·
+           lightpaint (the SVG's top-level <g> groups are scenes drawn in turn by one light; 2.4 s a scene + 0.8 s, hit printed) ·
+           swap (kinetic word swaps: --text1 "___ is next" --text2 "faster|bolder|yours"; 0.9 s a word + 1.5 s) ·
+           shatter (3.2 s: the mark shatters and re-forms as --svg2 / --text2; hit printed) ·
+           brandgrid (5 s: logo, colors, type, a stat counting up: --text1 label --text2 value)
+--finish dark [--mockup laptop]: cinematic finish on any template (opaque output; profile finish.dark settings).
 Outputs <Name>_<template>_Alpha.mov (ProRes 4444, alpha) and <Name>_<template>.mp4 (preview on --bg).
 --frames t1,t2,... renders only those stills (PNG) for a quick look.
-Brand colours (panel/bar colour, accent edge, text colour) and fonts (head, body, body_semibold) come from the profile;
---bg (preview .mp4 background, with or without the '#') defaults to the profile's primary colour, --accent (outro line 2)
-to its accent colour. Every profile font must load in the page; if one does not, motion.py stops with an error.
+Brand colors (panel/bar color, accent edge, text color) and fonts (head, body, body_semibold) come from the profile;
+--bg (preview .mp4 background, with or without the '#') defaults to the profile's primary color, --accent (outro line 2)
+to its accent color. Every profile font must load in the page; if one does not, motion.py stops with an error.
 """
 import argparse, base64, os, shutil, subprocess, sys, tempfile
 from playwright.sync_api import sync_playwright
@@ -80,12 +80,12 @@ def main():
     ap.add_argument("--sponsor"); ap.add_argument("--plate", help="lockup: background still (PNG/JPG) the camera moves over")
     ap.add_argument("--fps", type=float, default=60); ap.add_argument("--size", default="1920x1080")
     ap.add_argument("--bg", help="preview .mp4 background hex, 112233 or '#112233' (default: profile primary)")
-    ap.add_argument("--accent", help="outro line 2 colour (default: profile accent)"); ap.add_argument("--depth", type=float, default=0.03)
+    ap.add_argument("--accent", help="outro line 2 color (default: profile accent)"); ap.add_argument("--depth", type=float, default=0.03)
     ap.add_argument("--frames")
     ap.add_argument("--dur", type=float, help="override length (slam)")
     ap.add_argument("--place", help="cx,cy,bw,bh landing box for slam / writeon, frame fractions")
     ap.add_argument("--write", type=float, help="writeon: seconds the pen takes to trace the logo")
-    ap.add_argument("--finish", choices=["dark"], help="F1 cinematic finish on any template: dark ground, bloom, reflective "
+    ap.add_argument("--finish", choices=["dark"], help="cinematic finish on any template: dark ground, bloom, reflective "
                     "floor, depth of field, grain, vignette (settings: the profile's finish.dark block)")
     ap.add_argument("--mockup", choices=["laptop"], help="with --finish: the finished frame on a laptop screen")
     ap.add_argument("--png-seq", action="store_true", help="write a transparent PNG sequence instead of encoding")

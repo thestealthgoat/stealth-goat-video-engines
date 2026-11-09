@@ -1,5 +1,5 @@
 /*
- * components.css - the ui-kit components. Load after tokens.css. Every colour, size and duration is a token.
+ * components.css - the ui-kit components. Load after tokens.css. Every color, size and duration is a token.
  * Classes are prefixed ui- so they can sit beside an app's existing styles while it is migrated.
  * Contents: base + focus + skip link · buttons · fields (input, textarea, select, checkbox, radio, hint, error) ·
  *           cards · tables · toasts · dialog · badges · visually-hidden · reduced motion
@@ -19,7 +19,7 @@ body {
 h1, h2, h3, h4 { font-family: var(--font-head); line-height: var(--leading-tight); margin: 0 0 var(--space-3); }
 h1 { font-size: var(--text-3xl); } h2 { font-size: var(--text-2xl); } h3 { font-size: var(--text-xl); } h4 { font-size: var(--text-lg); }
 p { margin: 0 0 var(--space-4); max-width: var(--measure); }
-a { color: var(--color-link); text-underline-offset: 0.15em; }   /* links stay underlined: colour alone is not enough */
+a { color: var(--color-link); text-underline-offset: 0.15em; }   /* links stay underlined: color alone is not enough */
 a:hover { text-decoration-thickness: 2px; }
 img, svg, video, canvas { max-width: 100%; height: auto; }
 .ui-muted { color: var(--color-text-muted); }
@@ -57,7 +57,7 @@ img, svg, video, canvas { max-width: 100%; height: auto; }
 }
 .ui-btn:hover { background: color-mix(in srgb, var(--color-action) 88%, var(--color-text)); }
 .ui-btn:active { transform: translateY(1px); }
-/* secondary: outlined, same size and weight as primary (a "Cancel" or "Reject" is never shrunk or greyed out) */
+/* secondary: outlined, same size and weight as primary (a "Cancel" or "Reject" is never shrunk or grayed out) */
 .ui-btn--secondary { background: transparent; color: var(--color-text); border-color: var(--color-border); }
 .ui-btn--secondary:hover { background: var(--color-surface-2); }
 .ui-btn--ghost { background: transparent; color: var(--color-link); }
@@ -93,7 +93,7 @@ img, svg, video, canvas { max-width: 100%; height: auto; }
 .ui-input::placeholder, .ui-textarea::placeholder { color: var(--color-text-muted); opacity: 1; }  /* a hint, never the label */
 .ui-input:hover, .ui-select:hover, .ui-textarea:hover { border-color: var(--color-text-muted); }
 .ui-input:focus-visible, .ui-select:focus-visible, .ui-textarea:focus-visible { border-color: var(--color-focus); }
-/* invalid: border + message + the word in the message. Colour is never the only signal. */
+/* invalid: border + message + the word in the message. Color is never the only signal. */
 .ui-input[aria-invalid="true"], .ui-select[aria-invalid="true"], .ui-textarea[aria-invalid="true"] { border-color: var(--color-danger); }
 .ui-select {
   appearance: none; padding-right: var(--space-7);
@@ -103,7 +103,7 @@ img, svg, video, canvas { max-width: 100%; height: auto; }
 }
 .ui-input:disabled, .ui-select:disabled, .ui-textarea:disabled { background: var(--color-surface-2); color: var(--color-text-muted); cursor: not-allowed; }
 
-/* checkbox / radio: native controls (screen readers and keyboards just work), sized up, in the brand colour.
+/* checkbox / radio: native controls (screen readers and keyboards just work), sized up, in the brand color.
    <label class="ui-check"><input type="checkbox" name="x"> <span>Label text</span></label> */
 .ui-check { display: flex; align-items: flex-start; gap: var(--space-3); min-height: var(--target-min); padding-block: var(--space-2); cursor: pointer; }
 .ui-check input { width: 1.25rem; height: 1.25rem; margin: 0.125rem 0 0; flex: none; accent-color: var(--color-action); cursor: pointer; }
@@ -138,7 +138,7 @@ img, svg, video, canvas { max-width: 100%; height: auto; }
 .ui-table tbody tr:hover { background: var(--color-surface-2); }
 .ui-table .ui-num { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* ---- badges: always with words (not a coloured dot alone) -------------------------------------------- */
+/* ---- badges: always with words (not a colored dot alone) -------------------------------------------- */
 .ui-badge {
   display: inline-block; padding: 0.125rem var(--space-2); border-radius: var(--radius-pill);
   font-size: var(--text-xs); font-weight: var(--weight-semibold); line-height: 1.5;

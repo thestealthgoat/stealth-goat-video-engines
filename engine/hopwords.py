@@ -445,7 +445,7 @@ def make_bg(P, mode, W, H, dim=0.62):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="C1 bouncing-character verse / lyric (2D)")
+    ap = argparse.ArgumentParser(description="bouncing-character verse / lyric (2D)")
     ap.add_argument("--text", help="the verse or lyric as it should read on screen")
     ap.add_argument("--out", required=True)
     ap.add_argument("--name", default="verse")

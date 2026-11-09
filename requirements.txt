@@ -1,11 +1,11 @@
-# Python packages for the video engine (engine/, logo/, cutouts/, packs/).
+# Python packages for the video engine (engine/, logo/, cutouts/, web/).
 # Install: python3 -m pip install --user -r requirements.txt   (setup.sh does this)
 # Versions: lower bounds only; the engine is tested with the versions noted on the right (Python 3.14, macOS arm64).
 # System tools (Homebrew, not pip): ffmpeg + ffprobe, tesseract, imagemagick, node, cairo. See setup.sh.
 
 # core
 numpy>=2.0            # tested 2.5.4
-scipy>=1.11           # tested 1.18.1   beatmap.py, show-open collages
+scipy>=1.11           # tested 1.18.1   beatmap.py, measure.py, talkedit.py
 pillow>=10.0          # tested 13.0.0   every card / sheet / review image
 librosa>=0.10         # tested 1.0.0    beatsnap.py legacy beats, beat tests
 soundfile>=0.12       # tested 0.14.0   librosa audio loading
@@ -17,7 +17,7 @@ opencv-python-headless>=4.8   # tested 5.0.0.93
 # logo/ (vectorize, redraw, 3D and motion renders)
 vtracer>=0.6          # tested 0.6.15 (on Python 3.14 it segfaults on keyword args; vectorize.py calls it positionally)
 cairosvg>=2.7         # tested 2.9.1   needs Homebrew cairo (DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib)
-scikit-learn>=1.3     # tested 1.9.1   vectorize.py colour clustering
+scikit-learn>=1.3     # tested 1.9.1   vectorize.py color clustering
 fonttools>=4.40       # tested 4.68.0  redraw.py lettering
 playwright>=1.40      # tested 1.64.1  motion.py / render3d.py drive headless Chromium (python3 -m playwright install chromium)
 

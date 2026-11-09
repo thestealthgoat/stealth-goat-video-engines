@@ -1,7 +1,7 @@
-# team.uniform: the jersey colours `candidates` checks
+# team.uniform: the jersey colors `candidates` checks
 
-`candidates` keeps a frame only if the main person wears the team's colours. The check counts the share of his
-mask pixels (on the 960 px preview) that fall inside each colour band, in OpenCV HSV: H 0-179 (degrees / 2),
+`candidates` keeps a frame only if the main person wears the team's colors. The check counts the share of his
+mask pixels (on the 960 px preview) that fall inside each color band, in OpenCV HSV: H 0-179 (degrees / 2),
 S and V 0-255.
 
 ```json
@@ -29,7 +29,7 @@ opponent.
 | `team.min` | the share inside the team band must be at least this |
 | `reject[].max` | the share inside each reject band must be at most this; `name` is only a label |
 
-## Measuring your colours
+## Measuring your colors
 
 Crop a patch of jersey (and of the opponent's jersey) from a game photo, then print its HSV spread:
 
@@ -40,8 +40,8 @@ python3 -c "import cv2,numpy as np,sys; h=cv2.cvtColor(cv2.imread(sys.argv[1]),c
 Set the band a little wider than p10-p90. Then run `candidates` on one game and `Read` the `cutcand_N.jpg` sheets:
 
 - Teammates missing: lower `team.min` or widen `h`.
-- Opponents or fans getting through: add a `reject` band for their colour, or raise `team.min`.
-- A white or grey team kit is hard to tell from a white opponent; rely on `reject` bands for the opponent and on
+- Opponents or fans getting through: add a `reject` band for their color, or raise `team.min`.
+- A white or gray team kit is hard to tell from a white opponent; rely on `reject` bands for the opponent and on
   your own reading of the sheets, and leave non-team players out of `numbers.json`.
 
 Different home and away kits need two profiles, or edit `team.uniform` before each game's `candidates` run.

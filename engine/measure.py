@@ -3,20 +3,20 @@
 rebuilt on springs in logo/motion.html. Free tools only: ffmpeg, OpenCV, numpy, scipy.
 
   measure.py probe   <video> --out DIR [--start S] [--end S] [--dump]
-        cuts, flashes and motion events (frame numbers + seconds), colour palette of every shot.
+        cuts, flashes and motion events (frame numbers + seconds), color palette of every shot.
         Writes DIR/probe.json and DIR/probe.jpg (timeline + one frame per shot with its palette). --dump also saves
-        every analysed frame (half size JPG) to DIR/frames/ for looking.
+        every analyzed frame (half size JPG) to DIR/frames/ for looking.
   measure.py track   <video> --out DIR --start S --end S --ref T --el name:x,y,w,h [--el ...] [--scale 0.5]
         follows each element (a box drawn on the frame at --ref seconds, full-size pixels) through S..E and measures
-        its position (centre, px), scale and rotation (relative to --ref) and opacity (contrast gain against --ref,
+        its position (center, px), scale and rotation (relative to --ref) and opacity (contrast gain against --ref,
         1 = as at --ref). ECC alignment (cv2.findTransformECC, affine), frame to frame outward from --ref. Where an
         element fades below what ECC can lock onto, its geometry holds and only opacity keeps being measured
         ("ok": false). Writes DIR/track.json and DIR/track.jpg (every channel against time).
   measure.py fit     DIR/track.json [--out DIR/fit.json] [--max-springs 2] [--only a,b] [--start-at S] [--op-step 0.1]
-        fits springs (spring.py maths) to every channel that moves: start, from, to, zeta, omega, launch speed. Up to
+        fits springs (spring.py math) to every channel that moves: start, from, to, zeta, omega, launch speed. Up to
         --max-springs chained springs per channel (added like spring.camera_at keys). Prints the nearest preset and
         a ready motion.html call (timed('<preset>', settle, launch)). Opacity is also written as a step track
-        (op_steps: [time, level] each time the level, quantised to --op-step of the end level, changes), which is how
+        (op_steps: [time, level] each time the level, quantized to --op-step of the end level, changes), which is how
         flicker-on and blinks come out. --start-at pins the first spring to the section's first frame, so the curve
         extrapolates back over frames the tracker could not lock (motion blur). Writes fit.json and fit.jpg.
   measure.py compare <original> <rebuild> --out side.mp4 [--start S] [--dur S] [--labels "A|B"] [--audio]

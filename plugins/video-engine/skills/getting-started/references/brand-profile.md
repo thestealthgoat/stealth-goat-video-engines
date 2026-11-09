@@ -49,21 +49,21 @@ Other commands: `list`, `show <name> [--check]`, `default <name>` (writes `local
 | `delivery.outputs` | `["mp4", "premiere_xml"]` |
 | `layout.safe_px` | title-safe margin in pixels, drawn on the QA sheet (default 90 at 1080p) |
 | `style.audio_fade_ms`, `style.springs_default` | house style: audio fade at every cut; the default spring (`snappy`) |
-| `captions.*` | kinetic caption look: font role, size, stroke, box colour, position (template values are a good start) |
+| `captions.*` | kinetic caption look: font role, size, stroke, box color, position (template values are a good start) |
 | `talkedit.*` | talking-head edit defaults: pause trimming, fillers, punch-in zooms, cards, music level |
-| `explain.signal`, `explain.hot`, `explain.key` | optional explainer colours (signal gold, the answer colour, the caption keyword box) |
+| `explain.signal`, `explain.hot`, `explain.key` | optional explainer colors (signal gold, the answer color, the caption keyword box) |
 | `explain.font_scale`, `explain.head_caps` | optional: scale explainer text (e.g. 1.2 for a condensed face); `true` for a caps-only head face |
 | `finish.dark` | optional settings for `motion.py --finish dark` (bg, bloom, floor, dof, grain, vignette) |
 | `folders.read_only`, `folders.write_into` | folders tools must never write to, and where outputs go |
 
-Colours in hex with the `#`. Values that are paths are expanded: `{home}` is the user's home folder, `{repo}` the
+Colors in hex with the `#`. Values that are paths are expanded: `{home}` is the user's home folder, `{repo}` the
 engine folder, `{profile}` the profile's folder.
 
 ## Fonts
 
-- Use open-licence (SIL OFL) fonts so renders, project files and the profile can be shared. The engine folder's
-  `resources/fonts/` holds several with their `OFL-*.txt` licence texts; Google Fonts families are OFL too
-  (download the static `.ttf` files, not the variable font, and keep the licence text next to them).
+- Use open-license (SIL OFL) fonts so renders, project files and the profile can be shared. The engine folder's
+  `resources/fonts/` holds several with their `OFL-*.txt` license texts; Google Fonts families are OFL too
+  (download the static `.ttf` files, not the variable font, and keep the license text next to them).
 - Three roles cover nearly everything: `head` (a bold display face), `body`, `body_semibold`. A condensed body face
   fits more on a lower third.
 - After a font change, re-run `vprofile.py sample` and check every specimen line renders.
@@ -82,6 +82,6 @@ python3 engine/vprofile.py sample <name> ~/Movies/video-work/<name>_card.png
 ```
 
 On the brand card, check: the display name in the head face; the logo top right ("no logo in this profile yet" if
-there is no `logo_png` or `logo_svg`); one swatch per colour with its contrast against the card's dark ground; each
+there is no `logo_png` or `logo_svg`); one swatch per color with its contrast against the card's dark ground; each
 font role as a specimen line (a role that cannot load is printed in red); and the sample lower third with
 `text on primary N:1`. Aim for 4.5:1 or more; below that the card adds `(below 4.5:1)`.

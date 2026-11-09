@@ -1,4 +1,4 @@
-# Fresh-eyes reviewer prompt (H4)
+# Fresh-eyes reviewer prompt
 
 Whoever built the video never grades it. Spawn a sub-agent with no context from the build conversation. Give it only
 files, never an explanation of what the video is meant to say:
@@ -33,4 +33,4 @@ Answer with: about, score (this / previous), slop list hits, fix lines. Nothing 
 If the reviewer misreads the point of the video, that is a defect of the video, not of the reviewer: write it as a
 fix line (which beat failed to carry the idea, and how to make it carry it).
 
-Paste the answer under "## Fresh-eyes review (H4)" in `review.md`, replacing the placeholder lines.
+Paste the answer under the "Fresh-eyes review" heading in `review.md`, replacing the placeholder lines.

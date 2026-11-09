@@ -7,7 +7,7 @@
     encode.py copy-verify FILE... --to DIR|<paths key>        copy (cp -p) then byte-compare (cmp)
     encode.py verify  FILE [--expect SECONDS | --like INPUT...] [--full-verify]
 
-master: INPUT is one concat list (ffconcat .txt; inpoint/outpoint/duration lines are honoured for the duration
+master: INPUT is one concat list (ffconcat .txt; inpoint/outpoint/duration lines are honored for the duration
 check) or one or more media files (several are joined with a concat list written next to OUT under .enc/).
 The video is encoded with the preset (profile delivery.<preset>: vcodec, falling back to vcodec_fallback when
 this ffmpeg lacks it, bitrate, maxrate, bufsize); audio is copied. +faststart is used only when the expected

@@ -17,7 +17,7 @@ rembg's default folder). A fresh clone has no `local.json`: create it (`{ "rembg
 the ~1 GB files on another drive; models.py creates that folder if it is missing, and falls back silently when it
 cannot (an unmounted drive).
 
-| `--model` | Licence | Download | Use |
+| `--model` | License | Download | Use |
 |---|---|---|---|
 | `birefnet-general` (default) | MIT (BiRefNet, via rembg) | ~1 GB | The most complete people: hair, hands, feet, dark clothing on a dark ground. Keeps the main subject(s), drops bystanders. ~5-6 s a 1080p frame on a laptop CPU. |
 | `birefnet-portrait` | MIT | ~1 GB | Just as complete, but keeps everyone in the shot, bystanders too. Use when a second or third person must stay. |
@@ -56,7 +56,7 @@ body by independent reviewers, lower is better): MODNet 5.2, U^2-Net 3.2, BiRefN
 3. Small islands are dropped (`--min-region`).
 4. The temporal hold steadies unchanged edges (`--steady`).
 5. Choke, feather, and a clean-up that removes faint haze far from the person.
-6. Edge colour is rebuilt from the person's own nearby colour, so the old background does not bleed into the edge
+6. Edge color is rebuilt from the person's own nearby color, so the old background does not bleed into the edge
    of the alpha .mov.
 
 ## `<name>_matte.json`
@@ -73,7 +73,7 @@ motion is near 0, shimmer is high; under about 0.05 reads as solid), `edge_chang
 | People sideways in the check sheet | `--rotate cw` / `ccw` / `180` |
 | Edges shimmer, flicker mean over ~0.05 | raise `--steady` to 0.9-0.95 (then check for ghost trails, next row) |
 | Streaky ghost of the background where a hand or arm just was (not caught by the flicker number or qa) | lower `--steady` to 0.5, or 0; edges flicker a little more |
-| A coloured fringe of the old background | `--choke 1`, maybe `--feather 1.5` |
+| A colored fringe of the old background | `--choke 1`, maybe `--feather 1.5` |
 | A second person dropped | `--min-region 0.05` or 0, or `--model birefnet-portrait` |
 | A bystander kept | `--model birefnet-general` (default), raise `--min-region` |
 | Arms, legs or dark clothing missing | stay on a BiRefNet model; if still missing, the shot is too wide: use a closer angle |

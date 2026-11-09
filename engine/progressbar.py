@@ -173,7 +173,7 @@ class Bar:
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="O5 progress bar with a face marker")
+    ap = argparse.ArgumentParser(description="progress bar with a face marker")
     ap.add_argument("video"); ap.add_argument("--out", required=True); ap.add_argument("--name")
     ap.add_argument("--t0", type=float, default=0.0); ap.add_argument("--t1", type=float)
     g = ap.add_mutually_exclusive_group(required=True); g.add_argument("--face"); g.add_argument("--matte")

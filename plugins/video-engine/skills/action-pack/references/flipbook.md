@@ -62,16 +62,16 @@ Check a profile with `python3 engine/vprofile.py show <name> --check`.
 
 | Part | Vertical 1080x1920 | Wide 1920x1080 |
 |---|---|---|
-| Photo | fills the frame (crop to cover, centred across, 45% down) with a slow 1%-a-shot push | a 2:3 portrait card (about 670x1000) with a light border, over a blurred copy tinted 65% primary |
+| Photo | fills the frame (crop to cover, centered across, 45% down) with a slow 1%-a-shot push | a 2:3 portrait card (about 670x1000) with a light border, over a blurred copy tinted 65% primary |
 | Logo | 300 px wide, top-left | 280 px wide, top-left |
 | Counter | `BURST NN/NN` + tag line + one tick per shot, 330 px above the bottom | same, 110 px above the bottom |
 | Frame | white corner brackets | same |
-| Title card | `ACTION` (text colour) / `PACK` (accent) on primary, label below, logo 560 px wide above (top at y 480) | same, logo 560 px wide at y 60 |
+| Title card | `ACTION` (text color) / `PACK` (accent) on primary, label below, logo 560 px wide above (top at y 480) | same, logo 560 px wide at y 60 |
 
 The title-card logo has no height limit: at 560 px wide, a logo narrower than about 1.75:1 (width:height) reaches
 the top of `ACTION` in both layouts. `ap_helpers.py packprofile` makes a flipbook-only profile copy with the logo
 padded to 2:1.
-| End card | slam frames scaled to 1180x664 and centred, lines below | slam frames at full size, lines below |
+| End card | slam frames scaled to 1180x664 and centered, lines below | slam frames at full size, lines below |
 
 ## Timing (29.97 fps)
 
@@ -102,5 +102,5 @@ as the clicks it passes; see SKILL.md step 6.
 | flashes | a white flash on the title card and at every burst start | planned when `--shotlist pack.cuts.json` is given |
 | cuts | every shot change is a planned cut; the title flash is a cut at 0.033 s | an unplanned cut (FAIL) means the cut list was made with a different `--fps-photo` or plan. Expect a WARN `planned not found` and one "planned cut not detected" line per shot change too small for scdet to see (shots in a burst look alike); burst starts are found |
 | motion | photos held 2-3 frames; the title card still from 0.25 s to 1.0 s | `--allow-stutter` and `--holds "$(python3 "$H" get pack.cuts.json holds)"`; without `--holds` the title card FAILs as "nothing moves for 0.73 s" at f8-f29. Dead air anywhere else is real |
-| loudness / true peak | flipbook's own track is not levelled | the bed step's `loudnorm` fixes it |
+| loudness / true peak | flipbook's own track is not leveled | the bed step's `loudnorm` fixes it |
 | end tail | the end card fades to black | a static-tail FAIL means slam frames that stop moving too early: use a longer or livelier slam |

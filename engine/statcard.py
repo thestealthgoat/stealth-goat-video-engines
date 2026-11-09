@@ -20,7 +20,7 @@ stats.json (filled in by hand; every key but name and stats is optional):
    "count": true}                    # numbers count up (false: they appear as written)
 A reel card can hold the same keys inline or point at the file:  "card": {"type": "stats", "file": "stats/12_player.json"}.
 
-Brand comes only from the profile: colours primary / accent / text (text_dim and primary_deep when the profile has
+Brand comes only from the profile: colors primary / accent / text (text_dim and primary_deep when the profile has
 them, else derived), fonts head / body / body_semibold, logo brand.logo_png (top right of the panel; --no-logo or
 "logo": false hides it), safe area layout.safe_px (the default position). Nothing here knows any organisation.
 
@@ -599,7 +599,7 @@ def main(argv=None):
     ap.add_argument("--bg-in", type=float, default=0.0, help="start time in a --bg video")
     ap.add_argument("--frames", help="only render these stills (seconds, comma separated) on --bg")
     ap.add_argument("--no-logo", action="store_true")
-    ap.add_argument("--ae", action="store_true", help="X1: also write <name>_stats.jsx (+ _ae/ assets): the card as a "
+    ap.add_argument("--ae", action="store_true", help="also write <name>_stats.jsx (+ _ae/ assets): the card as a "
                     "native After Effects comp, springs baked to keyframes (File > Scripts > Run Script File)")
     ap.add_argument("--x0", type=int); ap.add_argument("--x1", type=int); ap.add_argument("--y1", type=int)
     a = ap.parse_args(argv)

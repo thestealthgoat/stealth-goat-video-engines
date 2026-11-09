@@ -1,11 +1,11 @@
 /*
  * tokens.css - the ui-kit design tokens. Copy into the app, then:
- *   1. Replace the colour block from your brand:  python3 scripts/palette.py make --primary "#..." --accent "#..." --write tokens.css
+ *   1. Replace the color block from your brand:  python3 scripts/palette.py make --primary "#..." --accent "#..." --write tokens.css
  *   2. Measure it:                                 python3 scripts/palette.py check tokens.css   (every pair must pass)
- *   3. Point the font tokens at fonts you are licensed to ship (self-host them with their licence file).
+ *   3. Point the font tokens at fonts you are licensed to ship (self-host them with their license file).
  * Everything else (type scale, spacing, radius, shadow, focus, motion) is brand-neutral and rarely needs changing.
  * Themes: light by default; dark follows the OS unless <html data-theme="light">; <html data-theme="dark"> forces dark.
- * The placeholder colours below come from an example brand (primary #2348b8, accent #d9480f).
+ * The placeholder colors below come from an example brand (primary #2348b8, accent #d9480f).
  */
 
 /* colours:start - made by scripts/palette.py from primary #2348b8, accent #d9480f; measured, see palette.py check */
@@ -115,7 +115,7 @@
   --border-width: 1px;  /* dividers */
   --control-border-width: 2px;  /* inputs, selects, checkboxes: their edge is the control, so it must show (3:1) */
 
-  /* ---- elevation: shadows add depth, never meaning (a card still needs its border or surface colour) -- */
+  /* ---- elevation: shadows add depth, never meaning (a card still needs its border or surface color) -- */
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
   --shadow-2: 0 4px 12px rgb(0 0 0 / 0.10), 0 2px 4px rgb(0 0 0 / 0.06);
   --shadow-3: 0 12px 32px rgb(0 0 0 / 0.16), 0 4px 8px rgb(0 0 0 / 0.08);
@@ -132,7 +132,7 @@
   --dur-instant: 0ms;
   --dur-ui: 200ms;        /* enter / open / state change (menus, popovers, toggles, toasts in) */
   --dur-ui-exit: 160ms;   /* exit / close: ~20% faster than the way in */
-  --dur-hover: 120ms;     /* colour-only feedback (hover, press) */
+  --dur-hover: 120ms;     /* color-only feedback (hover, press) */
   --ease-spring: linear(0, 0.08, 0.238, 0.406, 0.555, 0.675, 0.767, 0.836, 0.885, 0.921, 0.946, 0.963, 0.975, 0.983, 0.989, 0.993, 1);
   --move-ui: 8px;         /* how far things travel as they enter: small, so it reads as response, not show */
 

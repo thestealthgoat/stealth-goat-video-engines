@@ -19,19 +19,19 @@ Checks, in one run:
   audio      engine/audio_check.py with the cut list (hard audio cuts), when there is audio
   loudness   integrated LUFS and true peak against delivery.loudness_lufs (+-1 LU) / delivery.true_peak_db
   cuts       ffmpeg scdet cuts against the planned cuts -> unplanned jumps (only when a cut list is given)
-  flashes    1-2 frame luma spikes/drops; single foreign frames (a frame unlike both neighbours, which match)
+  flashes    1-2 frame luma spikes/drops; single foreign frames (a frame unlike both neighbors, which match)
   pops       an element appearing or vanishing in one frame (warning; motion and explainer only)
-  clicks     audio sample discontinuities; dropouts (digital silence inside the programme); silence >= 0.5 s
+  clicks     audio sample discontinuities; dropouts (digital silence inside the program); silence >= 0.5 s
   hook       something moves in the first 0.5 s; a strong moment (cut or big move) by 2 s
   holds      no hold over 0.8 s without life (motion, explainer); static tail / end card <= 1.5 s
-  freshness  explainer only: no stretch longer than --max-scene without a new visual: a cut, a scene change (colour
+  freshness  explainer only: no stretch longer than --max-scene without a new visual: a cut, a scene change (color
              histogram), or a local state change (a part of the frame that changes and stays changed: a new element,
              a readout or label changing, a box landing; a dot passing through or a steady drift doesn't count)
 
 Every flag is written as a fix line:  f<start>-f<end> (mm:ss.s) - what - why - fix
 Text safe-area and over-face checks are listed in review.md as manual checks to do from the sheet.
 --cuts none = "no cuts planned" (every detected cut is unplanned). Without --cuts/--shotlist cuts are listed only.
---shotlist list.txt: a listed part that doesn't exist here (a path from another shell, e.g. /sessions/<id>/mnt/...)
+--shotlist list.txt: a listed part that doesn't exist here (a path from another machine)
 is looked for next to the list; qa says so once, and stops naming both paths when neither exists.
 --kind loop: a loop or overlay piece (logo swing, corner bug, lower third). Same gates as motion, except the hook
 and end-tail gates, which are listed as SKIP with their measurement (a loop has no opening or ending of its own).
@@ -503,7 +503,7 @@ def gate_spec(R, info, V, P, a, kind):
     if not info["alpha"] and info["pix_fmt"] != want_pf:
         warns += 1
         R.flag("pix_fmt", "WARN", 0, R.n - 1, f"pixel format {info['pix_fmt']}, delivery uses {want_pf}",
-               "some players and platforms reject or shift colours", f"encode with -pix_fmt {want_pf}", "spec")
+               "some players and platforms reject or shift colors", f"encode with -pix_fmt {want_pf}", "spec")
     meas.append("audio" if info["audio"] else "no audio")
     if not info["audio"] and kind not in ("motion", "loop"):
         warns += 1
@@ -631,7 +631,7 @@ def gate_audio_faults(R, A, silences):
         return
     loud = np.where(db > SILENT_DB)[0]
     if not len(loud):
-        R.gate("clicks, dropouts, silence", "FAIL", "the whole track is silent", "programme audio")
+        R.gate("clicks, dropouts, silence", "FAIL", "the whole track is silent", "program audio")
         R.flag("silence", "FAIL", 0, R.n - 1, "the audio track is silent", "nothing to hear",
                "mux the mix in", "audio")
         return
@@ -651,7 +651,7 @@ def gate_audio_faults(R, A, silences):
         if inside and digital[s:e + 1].sum() >= 2:
             nd += 1
             R.flag("dropout", "FAIL", R.f(t0), R.f(t1) - 1, f"audio dropout: {dur:.2f} s of digital silence",
-                   "the sound vanishes mid-programme", "fill the gap from the source or crossfade across it",
+                   "the sound vanishes mid-program", "fill the gap from the source or crossfade across it",
                    "audio", {"dur": round(dur, 3)})
         elif inside and dur >= 0.5:
             ns += 1
@@ -678,7 +678,7 @@ def gate_audio_faults(R, A, silences):
                "find the edit point or the clipped sample; add a 5-10 ms crossfade or de-click it", "audio",
                {"t_exact": round(t, 4)})
     R.gate("clicks, dropouts, silence", "FAIL" if nd + nc + ns else "PASS",
-           f"{nc} clicks, {nd} dropouts, {ns} silences", "none inside the programme")
+           f"{nc} clicks, {nd} dropouts, {ns} silences", "none inside the program")
 
 
 def detect_cuts(V):
@@ -720,11 +720,11 @@ def gate_flashes(R, V, planned_f):
             if not planned:
                 if kind == "flash":
                     R.flag("flash", "FAIL", s, e, f"{e - s + 1}-frame {'white' if mag > 0 else 'black'} flash "
-                           f"(luma {mag:+.0f} against both neighbours)",
+                           f"(luma {mag:+.0f} against both neighbors)",
                            "reads as a glitch and is a photosensitivity risk",
                            f"replace f{s}-f{e} with f{s - 1} (or move the flash onto a planned cut)", "flashes")
                 else:
-                    R.flag("glitch", "FAIL", s, e, f"single foreign frame (differs from both neighbours by "
+                    R.flag("glitch", "FAIL", s, e, f"single foreign frame (differs from both neighbors by "
                            f"{mag:.0f}, they match each other)", "a stray frame from another shot or a render seam",
                            f"delete f{s} or fix the edit point", "flashes")
             i = e + 2
@@ -787,7 +787,7 @@ def gate_pops(R, V, cuts, flash_events):
             k += 1
             if k <= 20:
                 R.flag("pop", "WARN", i, i, f"{c[i] * 100:.1f}% of the picture changes in one frame",
-                       "an element appears or vanishes with no move (G1: nothing grows from zero or pops on)",
+                       "an element appears or vanishes with no move (nothing grows from zero or pops on)",
                        "bring it in on a spring from oversize or off-frame, 6-10 frames", "pops")
     R.gate("pops", "WARN" if k else "PASS", f"{k} one-frame pops", "none (warning only)")
 
@@ -960,7 +960,7 @@ def gate_freshness(R, V, cuts, max_scene):
                "an explainer stalls when nothing new arrives; the eye wants a new element or state every 1-2 s",
                f"add a new element, readout or state change every 1-2 s in this span (max {max_scene:g} s)",
                "freshness")
-    R.gate("freshness (E6)", "FAIL" if bad else "PASS", f"longest {longest:.1f} s, {len(ev)} new visuals",
+    R.gate("freshness", "FAIL" if bad else "PASS", f"longest {longest:.1f} s, {len(ev)} new visuals",
            f"<= {max_scene:g} s")
     return [round(f / fps, 3) for f in ev]
 
@@ -1152,12 +1152,12 @@ def write_review(path, R, info, V, A, a, kind, profile_name, cuts_table, planned
     L.append("- [ ] Every cut has a visible cause that comes first (motion, a hit, a look); no reversals or ghost frames")
     L.append("- [ ] No decorative wipes, inverts, added shake or light leaks; every effect is born from the picture and "
              "lands on the music")
-    L.append("- [ ] Slop list (G1): corner labels, counters, timecodes, corner brackets, \"headline left / card right\" "
+    L.append("- [ ] Slop list: corner labels, counters, timecodes, corner brackets, \"headline left / card right\" "
              "deck layouts, typed-out headlines with a caret, fades everywhere")
     L.append("- [ ] Continuity across cuts; nothing cut by the frame edge; no slow \"nothing new\" stretches")
     L.append("- [ ] Every machine flag above judged by frame: real, intended or false alarm")
     L.append("- [ ] Sound was measured, not heard: a person listens before acceptance")
-    L.append("\n## Fresh-eyes review (H4)\n")
+    L.append("\n## Fresh-eyes review\n")
     L.append("Not run yet. Spawn a reviewer with no context (see the video-gates skill): what it is about, score /10 "
              "against the last version, cheap or templated moments, fixes in the fix-line format.\n")
     L.append("- about: _\n- score: _/10 (last version: _/10)\n- fixes: _\n")

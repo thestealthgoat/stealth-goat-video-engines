@@ -59,7 +59,7 @@ shutil.rmtree(OUT, ignore_errors=True); os.makedirs(OUT)
 # a synthetic default profile, so the test never depends on this machine's default profile
 ENC_PROFILE = os.path.join(OUT, "prof_enc"); os.makedirs(ENC_PROFILE)
 json.dump({"name": "enc", "brand": {"colors": {"primary": "#000000", "accent": "#ffffff"}, "fonts": {}}, "paths": {},
-           "delivery": {"lightcast": {"vcodec": "h264_videotoolbox", "vcodec_fallback": "libx264",
+           "delivery": {"web": {"vcodec": "h264_videotoolbox", "vcodec_fallback": "libx264",
                                       "fallback_args": ["-preset", "fast"], "profile": "high", "b_v": "12M",
                                       "maxrate": "14M", "bufsize": "24M", "acodec": "copy", "faststart_max_gb": 10}}},
           open(os.path.join(ENC_PROFILE, "profile.json"), "w"))
@@ -74,7 +74,7 @@ lst = os.path.join(enc, "concat.txt")
 open(lst, "w").write(f"ffconcat version 1.0\nfile '{a}'\nfile '{b}'\ninpoint 1.0\n")
 master = os.path.join(final, "2026 Week 7 - Test.mp4")
 
-# 1. master from a concat list (inpoint honoured), Lightcast preset, verify
+# 1. master from a concat list (inpoint honored), web preset, verify
 rc, o = run("master", lst, "-o", master, caffeinate=True)
 expect("master exits 0 (caffeinate on)", rc == 0, o)
 expect("master written, no .partial left", os.path.isfile(master) and not os.path.exists(master.replace(".mp4", ".partial.mp4")))
@@ -110,7 +110,7 @@ expect("3 h at 12M lands over 10 GB (so a real game gets no faststart)", 3 * 360
 # 4. preset from a profile + encoder fallback + bitrate overrides
 pdir = os.path.join(OUT, "prof"); os.makedirs(pdir)
 json.dump({"name": "t", "brand": {"colors": {"primary": "#000000", "accent": "#ffffff"}, "fonts": {}}, "paths": {},
-           "delivery": {"lightcast": {"vcodec": "no_such_encoder", "b_v": "2M", "maxrate": "3M", "bufsize": "4M"}}},
+           "delivery": {"web": {"vcodec": "no_such_encoder", "b_v": "2M", "maxrate": "3M", "bufsize": "4M"}}},
           open(os.path.join(pdir, "profile.json"), "w"))
 m3 = os.path.join(final, "fallback.mp4")
 rc, o = run("master", a, "-o", m3, "--profile", pdir, "--no-verify")
@@ -141,7 +141,7 @@ rc, o = run("verify", master, "--like", lst, "--full-verify")
 expect("--full-verify on a good file", rc == 0 and "full file" in o)
 
 # 7. copy-verify into a 'Dropbox' folder
-box = os.path.join(OUT, "lightcast"); os.makedirs(box)
+box = os.path.join(OUT, "web"); os.makedirs(box)
 log = os.path.join(OUT, "dropbox_copy.log")
 rc, o = run("copy-verify", master, "--to", box, "--log", log)
 expect("copy-verify OK + byte identical", rc == 0 and "COPY_OK" in o and
@@ -161,18 +161,18 @@ expect("--help", r.returncode == 0 and "copy-verify" in r.stdout)
 expect("finds ffmpeg", encode.find_ffmpeg() is not None)
 
 # 9. the preset comes from the profile only (no built-in bitrates): missing preset / keys fail clearly
-for k, (dl, want) in enumerate([({}, "has no delivery.lightcast"),
-                                ({"lightcast": {"vcodec": "libx264", "maxrate": "3M", "bufsize": "4M"}}, "missing b_v")]):
+for k, (dl, want) in enumerate([({}, "has no delivery.web"),
+                                ({"web": {"vcodec": "libx264", "maxrate": "3M", "bufsize": "4M"}}, "missing b_v")]):
     pd = os.path.join(OUT, f"prof_nopreset{k}"); os.makedirs(pd)
     json.dump({"name": f"np{k}", "brand": {"colors": {"primary": "#000000", "accent": "#ffffff"}, "fonts": {}}, "paths": {},
                "delivery": dl}, open(os.path.join(pd, "profile.json"), "w"))
     rc, o = run("master", a, "-o", os.path.join(final, f"np{k}.mp4"), "--profile", pd, "--no-verify")
-    expect(f"profile without a full delivery.lightcast -> clear FATAL ({want}), nothing written",
+    expect(f"profile without a full delivery.web -> clear FATAL ({want}), nothing written",
            rc != 0 and want in o and not os.path.exists(os.path.join(final, f"np{k}.mp4")), o)
 ts2 = os.path.join(OUT, "np.ts")
 ff("-i", a, "-c", "copy", "-f", "mpegts", ts2)
 rc, o = run("rewrap", ts2, "--profile", os.path.join(OUT, "prof_nopreset0"), "--no-verify")
-expect("rewrap needs no encode preset (profile without delivery.lightcast)", rc == 0 and os.path.isfile(ts2[:-3] + ".mp4"), o)
+expect("rewrap needs no encode preset (profile without delivery.web)", rc == 0 and os.path.isfile(ts2[:-3] + ".mp4"), o)
 
 # 10. ffmpeg never reads stdin: run with a terminal holding 'q' keystrokes as stdin (an ffmpeg that reads it quits early)
 import pty
@@ -200,7 +200,7 @@ expect("output == input: FATAL + ENCODE_FAIL + FAILED in the log", rc == 1 and "
 rc, o = run("master", a, "-o", os.path.join(final, "np_log.mp4"), "--profile", os.path.join(OUT, "prof_nopreset0"))
 L = tail_run(os.path.join(enc, "encode.log"))
 expect("no encode preset in the profile: FATAL + ENCODE_FAIL + FAILED in the log", rc == 1
-       and "has no delivery.lightcast" in L and "ENCODE_FAIL" in L and "=== FAILED master" in L, L)
+       and "has no delivery.web" in L and "ENCODE_FAIL" in L and "=== FAILED master" in L, L)
 badl = os.path.join(enc, "bad_concat.txt"); open(badl, "w").write(f"ffconcat version 1.0\nfile '{a}'\ninpoint soon\n")
 rc, o = run("master", badl, "-o", os.path.join(final, "bad.mp4"))
 L = tail_run(os.path.join(enc, "encode.log"))

@@ -20,7 +20,7 @@ Read by `engine/fcp7xml.py` (to Premiere XML) and `engine/beatsnap.py` (snaps th
  "overlays": [{"path": "/path/to/title.mov", "dur": 1.6, "at": 0.0, "in": 0, "out": 1.6, "label": "title"}]}
 ```
 
-- `items` play back to back on V1 / A1-2. Optional per item: `scale` (percent, about the frame centre), `big` (cut
+- `items` play back to back on V1 / A1-2. Optional per item: `scale` (percent, about the frame center), `big` (cut
   into it lands on a downbeat in beatsnap), `payoff` (cut into it lands on the drop), `replay` + `speed`.
 - `music[0].in` is the music offset beatsnap reads. After snapping, update `music[0].out` to the new end of the edit.
 - `overlays` are video-only clips on V2 (title cards, a caption layer) placed at `at`.
@@ -43,7 +43,8 @@ Read by `engine/fxpack.py`.
 - Each shot lasts whole `beats`; `hero: true` lands on the drop. `in` is the shot's start in its source.
 - `text`: kinetic words, one a beat from the drop (optional).
 - `fx`: `"auto"` or a list such as `[{"type": "flash", "at": 4.0}, {"type": "zoom", "at": 6.0}]`
-  (types `flash`, `zoom`, `rgb`, `ramp`, `whip`, `pop`, `text`). Every effect still has to pass the H3 gate.
+  (types `flash`, `zoom`, `rgb`, `ramp`, `whip`, `pop`, `text`). Every effect still has to pass the effect gate (a music
+  event within one frame and a measured picture reason).
 
 ## Moments list
 

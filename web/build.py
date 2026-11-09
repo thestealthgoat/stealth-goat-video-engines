@@ -139,6 +139,8 @@ def vendor_three(out, log, addons=()):
     addons: e.g. ("controls/OrbitControls.js", "environments/RoomEnvironment.js"). Returns the <script type=importmap>
     for <head>, so a template's module can `import * as THREE from 'three'` and `import ... from 'three/addons/...'`."""
     src = os.path.join(REPO, "logo", "node_modules", "three")
+    if not os.path.isfile(os.path.join(src, "build", "three.module.min.js")):
+        sys.exit("three.js not installed: run ./setup.sh (or: cd logo && npm ci)")
     dst = os.path.join(out, "assets", "vendor", "three"); os.makedirs(os.path.join(dst, "addons"), exist_ok=True)
     shutil.copy2(os.path.join(src, "build", "three.module.min.js"), os.path.join(dst, "three.module.min.js"))
     shutil.copy2(os.path.join(src, "LICENSE"), os.path.join(dst, "LICENSE"))

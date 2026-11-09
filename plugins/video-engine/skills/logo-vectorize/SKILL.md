@@ -6,8 +6,8 @@ description: Turns a raster logo (low-res PNG, JPG, screenshot, 3D mockup or pho
 # Logo vectorize
 
 Turn a raster logo into a vector that matches the original. `logo/vectorize.py` removes a solid background,
-upscales small images ×4 (EDSR super-resolution, else Lanczos), finds the flat colours (optionally snapped to brand
-hexes), cleans each colour layer, traces smooth curves with vtracer, and stacks the layers outside-to-inside with no
+upscales small images ×4 (EDSR super-resolution, else Lanczos), finds the flat colors (optionally snapped to brand
+hexes), cleans each color layer, traces smooth curves with vtracer, and stacks the layers outside-to-inside with no
 seams. When tracing cannot work, rebuild the logo by hand with `logo/redraw.py`, using `logo/fontmatch.py` to find
 the lettering font.
 
@@ -20,8 +20,8 @@ is uploaded.
   https://github.com/thestealthgoat/stealth-goat-video-engines). Run every command as
   `cd "$VIDEO_ENGINE" && python3 logo/<tool>.py ...`.
 - If `$VIDEO_ENGINE` is unset or the folder has no `logo/vectorize.py`, ask the user where the engine is, or set it
-  up (the **getting-started** skill walks through it): `git clone https://github.com/thestealthgoat/stealth-goat-video-engines`,
-  `cd stealth-goat-video-engines && ./setup.sh`, then `export VIDEO_ENGINE="$PWD"`. `setup.sh` targets macOS with
+  up (the **getting-started** skill walks through it): `git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine`,
+  `cd ~/video-engine && ./setup.sh`, then `export VIDEO_ENGINE="$HOME/video-engine"`. `setup.sh` targets macOS with
   Homebrew; on other systems install the packages it lists by hand.
 - Check the tools once per machine: `cd "$VIDEO_ENGINE" && ./setup.sh --check` (installs nothing). If vtracer,
   cairosvg, sklearn or fontTools are missing, or you want the AI upscale, run `logo/setup.sh` (it works from any
@@ -37,7 +37,7 @@ is uploaded.
 ## 1. Find the best source first
 
 - Ask for, or look for, an official vector before tracing anything: a brand kit, `logo.svg` / `.ai` / `.eps` /
-  `.pdf` in the asset folder, the organisation's press page. A real vector beats any trace; if one exists, use it
+  `.pdf` in the asset folder, the organization's press page. A real vector beats any trace; if one exists, use it
   and stop.
 - From the rasters, pick the **largest, cleanest** file: transparent PNG over JPG, the biggest pixel size, no
   compression blocks.
@@ -53,17 +53,17 @@ cd "$VIDEO_ENGINE" && python3 logo/vectorize.py <logo.png|jpg> <out_dir> <Name> 
 ```
 
 It writes `<out_dir>/<Name>.svg`, `<Name>_Transparent_4000px.png` and `<Name>_vector_check.png`, prints one
-`layer #hex  area ..%  paths N` line per colour, then the **FIDELITY** line.
+`layer #hex  area ..%  paths N` line per color, then the **FIDELITY** line.
 
 Main options (full list and troubleshooting in [references/vectorize.md](references/vectorize.md)):
-- `--palette "#hex,..."`: brand colours. Thin outlines in those colours survive, and colours snap to the exact hexes.
-- `--colors N`: the true number of flat colours. Set it whenever you know it: it stops anti-aliased edges becoming
+- `--palette "#hex,..."`: brand colors. Thin outlines in those colors survive, and colors snap to the exact hexes.
+- `--colors N`: the true number of flat colors. Set it whenever you know it: it stops anti-aliased edges becoming
   an extra fringe layer.
 - `--bg auto|none|#hex`: `auto` removes a solid background connected to the edge; `none` keeps the logo's own
   background plate when it is part of the art.
 - `--detail 1.5` for fine lettering; `--detail 0.7` for noisy JPGs.
 - `--flatten-shading` (+ `--bg-light`) for mildly embossed or photographed logos: drops light neutral shadows and
-  groups colours by hue instead of brightness. Try it once before switching to a redraw.
+  groups colors by hue instead of brightness. Try it once before switching to a redraw.
 
 ### Worked example (fresh clone, demo profile)
 
@@ -74,21 +74,21 @@ cd "$VIDEO_ENGINE" && python3 logo/vectorize.py profiles/demo/assets/demo_logo.p
 ```
 
 Expected: two layers (`#f2b705` about 59 %, `#0b3d2e` about 41 %) and
-`FIDELITY silhouette IoU 1.000  mean colour error 1.2/255  colours 2`. Without `--colors 2` the same run adds a
+`FIDELITY silhouette IoU 1.000  mean color error 1.2/255  colors 2`. Without `--colors 2` the same run adds a
 third, about 2 % olive layer: the anti-aliased edge between gold and green. That is the case `--colors` is for. The
 demo logo is 551 × 320, so a fresh clone without `logo/setup.sh` upscales it with Lanczos; these numbers are from
 that case.
 
 ## 3. Judge the result
 
-1. Read the FIDELITY line. Good: **IoU ≥ 0.98** and **colour error ≤ 20/255**. Below 0.97 IoU, look closely before
+1. Read the FIDELITY line. Good: **IoU ≥ 0.98** and **color error ≤ 20/255**. Below 0.97 IoU, look closely before
    using it.
 2. `Read` `<Name>_vector_check.png` (original | vector | difference). In the difference panel, red is shape the
-   vector missed and blue is shape it added; the rest shows colour difference, so a near-black panel is a match.
+   vector missed and blue is shape it added; the rest shows color difference, so a near-black panel is a match.
    Check lettering, thin outlines and small holes by eye, not only by score.
 3. Fix and re-run, at most three attempts:
-   - colours merged or a thin outline vanished: add that colour to `--palette`, or raise `--colors`;
-   - an extra small layer of an in-between colour: lower `--colors` to the true count;
+   - colors merged or a thin outline vanished: add that color to `--palette`, or raise `--colors`;
+   - an extra small layer of an in-between color: lower `--colors` to the true count;
    - lumpy or rounded-off edges: raise `--detail`, or find a larger source;
    - speckles or JPEG noise traced as shapes: lower `--detail`;
    - the logo's white plate disappeared: `--bg none`.
@@ -98,7 +98,7 @@ that case.
 ## 4. Redraw mode, when tracing fails
 
 Use a redraw for 3D mockups, embossed or metal renders, photos of signs, and logos with baked-in shadows or
-lighting. The signs: the layer colours sit only a few units apart, the check image looks blotchy, or shadows join
+lighting. The signs: the layer colors sit only a few units apart, the check image looks blotchy, or shadows join
 up with shapes. Rebuild the logo the way a designer would. Full API, helper scripts and a worked example are in
 [references/redraw.md](references/redraw.md).
 
@@ -119,8 +119,8 @@ up with shapes. Rebuild the logo the way a designer would. Full API, helper scri
    style).
 3. **Rebuild** in a short per-logo Python script with `redraw.Doc(w, h)` in the reference image's pixel space:
    `poly()` / `rect()` for shapes (with `holes=` for cut-outs), `line()` / `polyline()` for strokes (filled quads, so
-   they extrude in 3D later), `text()` to set real font outlines stretched to the measured box. Pick 3–5 flat colours
-   from the art; a mockup's lighting is not a colour.
+   they extrude in 3D later), `text()` to set real font outlines stretched to the measured box. Pick 3–5 flat colors
+   from the art; a mockup's lighting is not a color.
 4. **Check.** `d.check(ref, 'check.png')` writes reference | redraw | redraw outline over reference. `Read` it and fix
    any edge that drifts more than a few px. Simplify illustrations to clean shapes; don't chase texture or shading.
 5. **Label it.** Say clearly it is a **redraw**: close to the original, not the designer's file. If the owner can
@@ -157,5 +157,5 @@ sponsor's logo especially), say who to ask.
 
 - Want it in 3D? Run the **logo-3d** skill on the new SVG. Animated (intro, end card, corner bug)? Run
   **logo-motion**. Any video made from it goes through **video-gates** before delivery.
-- Logos of other organisations: keep their original untouched, use the vector only for the job at hand, and prefer
+- Logos of other organizations: keep their original untouched, use the vector only for the job at hand, and prefer
   their official file whenever they can supply it.

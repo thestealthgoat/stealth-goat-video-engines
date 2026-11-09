@@ -9,7 +9,7 @@ renders, photos of signs, baked-in lighting). Work in a folder outside the engin
 `redraw.py` has no measuring tool; write this small helper into the work folder as `grid.py`:
 
 ```python
-"""grid.py <src> <out.png> <step_px> <scale> [x0,y0,x1,y1]  - enlarged copy with a labelled grid in source pixels."""
+"""grid.py <src> <out.png> <step_px> <scale> [x0,y0,x1,y1]  - enlarged copy with a labeled grid in source pixels."""
 import sys
 from PIL import Image, ImageDraw
 src, out, step, scale = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
@@ -46,7 +46,7 @@ python3 "$VIDEO_ENGINE/logo/fontmatch.py" <image> "<TEXT>" x0,y0,x1,y1 <fonts_di
 - Crops the box, builds a letter mask (pixels darker than `--thresh` L*, or lighter than `-thresh` when negative),
   renders TEXT in every `.ttf`/`.otf` directly in `fonts_dir` (variable fonts at weights 600/700/800/900), stretches
   each to the mask's ink box and ranks by IoU.
-- Prints `IoU  font-file [wght N]` for the top matches and writes `fontmatch_<TEXT>.png` (grey = logo letters, red =
+- Prints `IoU  font-file [wght N]` for the top matches and writes `fontmatch_<TEXT>.png` (gray = logo letters, red =
   font outline) **into the current folder**, so `cd` into the work folder first.
 - ≥ 0.80 is usually the same family or close enough to rebuild; compare the overlay for tell-tale letters (R legs,
   G spurs, Q tails).
@@ -82,7 +82,7 @@ from redraw import Doc
 | `d.polyline(pts, width, fill)` | Joined strokes (one quad per segment). |
 | `d.text(s, font_path, (x0, y0, x1, y1), fill, tracking=0.0)` | The string in real font outlines, its ink box stretched to exactly fill the box. `tracking` adds letter spacing in em. |
 | `d.save(path)` / `d.svg()` | Write / return the SVG. |
-| `d.check(ref_path, out_path, scale=2)` | Reference \| redraw on grey \| redraw outline (cyan) over the reference. |
+| `d.check(ref_path, out_path, scale=2)` | Reference \| redraw on gray \| redraw outline (cyan) over the reference. |
 
 There are no curves or rounded corners: approximate arcs with short segments, e.g.
 
@@ -97,7 +97,7 @@ def rounded(x0, y0, x1, y1, r, n=8):
 ```
 
 For a complex illustration (a mascot, a crest), redraw the lettering and geometric parts, and consider tracing a
-cleaned, flat-coloured crop of the illustration with `vectorize.py`, then stacking both in one SVG.
+cleaned, flat-colored crop of the illustration with `vectorize.py`, then stacking both in one SVG.
 
 ## 4. Worked example (demo profile logo)
 

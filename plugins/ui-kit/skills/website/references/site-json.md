@@ -19,7 +19,7 @@ Everything `web/build.py` reads. Relative image and frame paths resolve against 
 | `hero` | yes | the template's fields (below) |
 | `sections` | no | the section kit, in page order (below) |
 | `third_party` | no | only when the owner wants analytics or embeds: `[{"name", "collects", "why", "src", "cookie"}]`. Any entry turns on the cookie policy page and a consent banner; each `src` loads only after Accept |
-| `images_owner`, `images_licence` | when there are images | default source and licence for every image (per-image `credit` / `licence` win). Write `"UNSPECIFIED"` to flag an open question for the owner; leaving them out FAILs the gate |
+| `images_owner`, `images_licence` | when there are images | default source and license for every image (per-image `credit` / `licence` win). Write `"UNSPECIFIED"` to flag an open question for the owner; leaving them out FAILs the gate |
 | `credits` | no | a line in the footer (e.g. "3D scene drawn in code. No photos.") |
 | `email_list` | no | set only if the site signs people up for marketing email. The gate then stops reporting "no marketing email" as done; the kit has no sign-up block, so make sure the email service gives every message an unsubscribe link |
 
@@ -136,11 +136,11 @@ money shot (it is also the still for reduced motion). Same 32 / 16 MiB budgets a
 ```
 
 No photos: the glass stage is generated. `at` is the share of the scroll for each chapter; `glass.seed` changes the
-layout, `glass.tint` how much of the accent colours the glass (0 = clear). The hero's id is `top`.
+layout, `glass.tint` how much of the accent colors the glass (0 = clear). The hero's id is `top`.
 
-## Colours and fonts (from the profile)
+## Colors and fonts (from the profile)
 
 The site's palette is derived from the profile's `primary`, `accent` and `text` (and `primary_deep` if present): the
 ground is always dark, and body text, muted text and the accent are adjusted until each passes 4.5:1. Fonts are the
-profile's `head`, `body` and `body_semibold`, copied into the site with the licence file found beside each font
-(`OFL-<Family>.txt`, `LICENSE-<Family>.txt`, or a bare `OFL.txt`). A font with no licence file beside it FAILs the gate.
+profile's `head`, `body` and `body_semibold`, copied into the site with the license file found beside each font
+(`OFL-<Family>.txt`, `LICENSE-<Family>.txt`, or a bare `OFL.txt`). A font with no license file beside it FAILs the gate.

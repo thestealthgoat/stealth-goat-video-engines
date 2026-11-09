@@ -39,10 +39,10 @@ What to look for in each area, and the measurement that answers it. Only measure
 - How text arrives: per word on speech, per line, typed, swapped in place, masked.
 - Where it sits: safe area kept? Over faces (a fault) or beside them?
 
-## Colour and light
+## Color and light
 
 - Palette: `probe.json` `shots[].palette` (hex and share) and `accent` per shot.
-- Ground: flat colour, gradient, mesh gradient, footage, blurred footage.
+- Ground: flat color, gradient, mesh gradient, footage, blurred footage.
 - Accent discipline: one accent used only for the thing that matters, or many.
 - Light: glow, bloom, rim light, grain, vignette, depth of field, light leaks (decorative leaks are on the engine's
   slop list).

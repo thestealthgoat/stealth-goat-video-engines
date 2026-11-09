@@ -9,7 +9,7 @@ edit.json: {"name": "Wk07 Highlights", "fps": 59.94, "w": 1920, "h": 1080,
             "music": [{"path": "/path/to/music.mp3", "dur": 180.0, "at": 0.0, "in": 0.0, "out": 120.0, "gain_db": -12}],
             "markers": [{"at": 12.3, "name": "TD"}],
             "overlays": [{"path": "/path/to/card.mp4", "dur": 1.6, "at": 20.0, "in": 0, "out": 1.6, "label": "card"}]}
-Optional per item: "scale": 108 (Basic Motion scale in percent, about the frame centre).
+Optional per item: "scale": 108 (Basic Motion scale in percent, about the frame center).
 "overlays": video-only clips on V2 above the cut (title cards, a caption layer), placed at "at" seconds.
 Paths are data: they are written as given, so they must be the paths Premiere will see on the editing machine
 (e.g. the shared drive's mount point), not the paths of the machine that runs this script.

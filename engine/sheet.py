@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Contact sheet for review: sheet.py <video> <out.jpg> <t0> <t1> [--n 12] [--cols 6] [--w 320] [--label TEXT]
-Frames evenly from t0..t1 (seconds in <video>), each labelled with its time. Runs wherever ffmpeg is."""
+Frames evenly from t0..t1 (seconds in <video>), each labeled with its time. Runs wherever ffmpeg is."""
 import sys, subprocess, tempfile, os
 import numpy as np, cv2
 

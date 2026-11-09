@@ -155,7 +155,7 @@ class Card:
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="E5 quote callout")
+    ap = argparse.ArgumentParser(description="quote callout")
     ap.add_argument("--text", required=True); ap.add_argument("--by", required=True); ap.add_argument("--role", default="")
     ap.add_argument("--out", required=True); ap.add_argument("--name", default="quote")
     g = ap.add_mutually_exclusive_group(required=True); g.add_argument("--matte"); g.add_argument("--cutout")

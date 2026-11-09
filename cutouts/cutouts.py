@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Player Cutouts - find, cut, check and file player cutouts from a culled game (runs after Photo Cull).
-Every command takes --profile NAME (default: $VIDEO_PROFILE, then local.json): the team uniform colours
-(team.uniform), the review-sheet background (brand colour primary), the label font (brand font body) and the
+Every command takes --profile NAME (default: $VIDEO_PROFILE, then local.json): the team uniform colors
+(team.uniform), the review-sheet background (brand color primary), the label font (brand font body) and the
 team abbreviation in library file names (team.home_abbr) come from it.
 
   cutouts.py candidates <cull dir> <Wk>                          cloud: needs the cull dir's rows.json, masks/ and prev960/
@@ -10,7 +10,7 @@ team abbreviation in library file names (team.home_abbr) come from it.
         - there is one dominant person (a second person > 15% of him is a reject);
         - nothing is cut off at the top or sides;
         - he is at least 35% of the frame height;
-        - he wears the team uniform (team-colour share of his pixels, not the opponent's colours; profile team.uniform);
+        - he wears the team uniform (team-color share of his pixels, not the opponent's colors; profile team.uniform);
         - the subject passed the focus pass.
       One frame is kept per burst. Read the sheets and write the jersey numbers you can read into numbers.json:
       {"R5_12345": "12", "R5_23456": null, "R5_34567": "MASCOT"}. Use null for an unreadable number; a name not
@@ -22,7 +22,7 @@ team abbreviation in library file names (team.home_abbr) come from it.
       which lost helmets and torsos.) Models: engine/models.py ($U2NET_HOME, local.json "rembg_models", resources/models/rembg).
       Grade A = full body; B = cut at the frame bottom (3/4); X = reject (mask disagreement IoU < 0.8, soft edge
       > 25%, more than one part, cut at the top or sides, or under 1,500 px tall). Writes <out>/png/, <out>/grades.json
-      and <out>/review_N.jpg (on the primary colour). LOOK at the review sheets; --override name=A|B|X if a grade is wrong.
+      and <out>/review_N.jpg (on the primary color). LOOK at the review sheets; --override name=A|B|X if a grade is wrong.
   cutouts.py library <out dir> <roster.csv> <library dir> --games-map cull/rows.json ...
       Builds/extends "<library>/#<n> <Name>/{Cutouts,Portraits,Action}", _Unidentified, _Mascot, _index.csv,
       _Overview.jpg, and lib_plan.json (Mac copies the full-res crops into Portraits/Action).
@@ -158,6 +158,8 @@ def library(out, roster, lib):
     print(len(rows), 'cutouts in the library;', len({r['player'] for r in rows if not r['player'].startswith('_')}), 'players')
 
 if __name__ == '__main__':
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print(__doc__); sys.exit(0)
     c = sys.argv[1]
     if c == 'candidates': candidates(sys.argv[2], sys.argv[3])
     elif c == 'cut': cut(sys.argv[2], sys.argv[3], sys.argv[4])

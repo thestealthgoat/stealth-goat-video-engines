@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""talkedit.py - T1 "edit in my style": one command turns a talking-head video into a tight, captioned cut.
+"""talkedit.py - "edit in my style": one command turns a talking-head video into a tight, captioned cut.
 
     python3 engine/talkedit.py <video> --out <dir> [--profile NAME] [--start S --end S] [--name NAME]
                                [--music track.mp3 [--music-in S]] [--aspects 16:9,9:16] [--fresh]
@@ -1414,7 +1414,7 @@ def main(argv=None):
     ap.add_argument("--fresh", action="store_true", help="plan again (moves the old talkedit.json to _old/)")
     ap.add_argument("--plan-only", action="store_true", help="write the plan JSON and stop")
     ap.add_argument("--no-captions", action="store_true")
-    ap.add_argument("--caption-layer", action="store_true", help="also keep E1's ProRes 4444 caption layer (.mov)")
+    ap.add_argument("--caption-layer", action="store_true", help="also keep the captions' ProRes 4444 caption layer (.mov)")
     ap.add_argument("--crf", type=int, default=18)
     ap.add_argument("--qa", action="store_true", help="run engine/qa.py on every output")
     ap.add_argument("--preview", action="store_true", help="phone previews under 30 MB in <out>/preview/")

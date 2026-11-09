@@ -27,8 +27,8 @@ What it does (numbers from the profile's `talkedit` block, merged over the `RECI
    `cut.keep_pause` (0.20 s). Every cut sits in measured quiet, never mid-word, with a voice fade of at least 40 ms.
 3. Punch-ins alternate 1.0 / `zoom.punch_scale` (1.08) at jump cuts (held at least `zoom.min_hold_s`); a hook push
    opens the shot when nothing happens in the first 2 s; spring push-ins on emphasis words about every
-   `zoom.push_every_s` (8 s), centred on the face (OpenCV face finder).
-4. Cutaway cards: a full-frame title on the profile colour block, the phrase being said, about one a minute
+   `zoom.push_every_s` (8 s), centered on the face (OpenCV face finder).
+4. Cutaway cards: a full-frame title on the profile color block, the phrase being said, about one a minute
    (`cards.per_min`), fitted inside the safe area; on the beat with `--music`.
 5. Pop-up cards on cue: a number with its noun counts up, trigger words from `talkedit.pops.triggers`
    (`{"word": "CARD TEXT"}`, default none), emphasis words fill the rest (`pops.per_min`, default 3 a minute).
@@ -50,7 +50,7 @@ Gotchas:
 - A gated podcast mix reads as digital silence between phrases; talkedit treats 35 dB under the speech level as
   quiet and lays a quiet room tone under it, so no pause becomes a dropout.
 - Sound whisper skipped (a breath, an unsure word) is kept whole and uncaptioned; the silence around it is cut.
-- The XML zoom is a plain Scale about the frame centre (push-ins become a split at the pushed scale); only the 16:9
+- The XML zoom is a plain Scale about the frame center (push-ins become a split at the pushed scale); only the 16:9
   cut has an XML.
 - Some program recorders' files put audio up to ~1 s off with ffmpeg's fast seek; talkedit decodes the sound once,
   sample-exact. Use the same care in any hand-made ffmpeg step (output-side `-ss`).
@@ -78,7 +78,7 @@ highlight, `"break": true` to start a caption; delete a line to drop a word; dro
   `<name>.fill.json` is editable and reused). `band` / `crop` force one layout.
 - In the 9:16, qa.py flags more "unplanned cuts" than in the 16:9 (the crop enlarges whip pans in phone clips):
   compare with a qa run on the uncaptioned source before fixing anything.
-- Style: the profile's `captions` block (font role, size, stroke, box colour, position, spring).
+- Style: the profile's `captions` block (font role, size, stroke, box color, position, spring).
 
 ## fxpack.py
 
@@ -92,16 +92,16 @@ python3 engine/fxpack.py <plan.json> --out DIR [--name N] [--profile P] [--fps 2
 
 - Shots last whole beats on the bar map; the `hero` shot lands on the drop.
 - `"fx": "auto"` places: a flash cut on the drop; a speed ramp (1 to 0.35x on a smooth spring) into the drop when
-  the shot before it moves; whip pans on cuts whose outgoing shot pans hard (two at most, never neighbours); a zoom
-  punch on the strongest hit inside a shot, centred on the action; RGB split on the top hits over fast action; black
+  the shot before it moves; whip pans on cuts whose outgoing shot pans hard (two at most, never neighbors); a zoom
+  punch on the strongest hit inside a shot, centered on the action; RGB split on the top hits over fast action; black
   and white keeping the hue the movers carry, on the hero; kinetic text one word a beat from the drop, on the side
   away from the action. Or give a list: `[{"type": "flash", "at": 4.0}, ...]` with types `flash`, `zoom`, `rgb`,
   `ramp`, `whip`, `pop`, `text`.
-- **H3 gate:** an effect needs a music event (beat, downbeat, hit, riser, drop) within one frame AND a measured
+- **Effect gate:** an effect needs a music event (beat, downbeat, hit, riser, drop) within one frame AND a measured
   picture reason. Otherwise nothing renders (exit 3) and the effect is listed in `<N>_fx.json`.
 - Portrait clips are cover-cropped, never stretched. `--size 1080x1920` for a vertical.
 - Outputs: `<N>_fx.mp4`, `<N>_fx.xml` (shots, music, a marker per effect), `<N>_fx.json`, `<N>_fx_music.wav` (the
-  levelled music the XML points at); prints the qa arguments (`qa: --kind edit --cuts ...`).
+  leveled music the XML points at); prints the qa arguments (`qa: --kind edit --cuts ...`).
 - qa's hook gate needs a cut or a big move by 2.0 s (the frame nearest 2 s counts): keep the first shot to 2 s or
   less, or open on a big move.
 - Look at `--frames` stills first: pick in-points on live action, not on replays, title graphics or name straps.
@@ -155,7 +155,7 @@ Paths are written as given: use the paths of the editing machine. `--single` mak
 ## hopwords.py
 
 Bouncing-character verse or lyric (2D): a character hops word to word on a gravity arc, landing on each word's start
-time; each word lights up and pops; the word underfoot is in the accent colour. Lines balanced over pages (3 a page
+time; each word lights up and pops; the word underfoot is in the accent color. Lines balanced over pages (3 a page
 in 16:9, 5 in 9:16).
 
 ```
@@ -206,7 +206,7 @@ python3 engine/encode.py verify FILE [--expect SECONDS | --like INPUT...] [--ful
   ship `delivery.web` (libx264, 12M / 14M / 24M), so `master ... --profile demo` works without `--preset`. A profile
   without the preset stops with `FATAL: no encode preset '<name>': profile <p> has no delivery.<name>`: add one
   ([formats.md](formats.md#encode-preset)).
-- `master`: one ffconcat list (in/out points honoured) or several media files (joined). Video encoded with
+- `master`: one ffconcat list (in/out points honored) or several media files (joined). Video encoded with
   `delivery.<preset>`, audio copied; falls back to `vcodec_fallback` (libx264) when this ffmpeg lacks the encoder.
 - Writes `<name>.partial.mp4`, renamed on success; never replaces an output without `--force`; an input is never an
   output. Verify runs after master and rewrap (decode errors in the first and last minute, duration check).
@@ -234,7 +234,7 @@ of the Reels/TikTok UI. Audio copied untouched (the input needs an audio track),
 python3 engine/sheet.py <video> <out.jpg> <t0> <t1> [--n 12] [--cols 6] [--w 320] [--label TEXT]
 ```
 
-Frames evenly from t0 to t1, each labelled with its time. Keep t1 a little before the end of the file (a frame at
+Frames evenly from t0 to t1, each labeled with its time. Keep t1 a little before the end of the file (a frame at
 the exact end comes out black). No profile.
 
 ## clip_plays.py
@@ -265,6 +265,6 @@ instead of every frame.
 - `engine/offload.py <card> <dest> [--ext MP4,MOV] [--dry-run] [--check-only] [--profile P]` - safe, resumable
   card copy with byte verification; `--dry-run` first.
 - `engine/cutout.py in.jpg out.png [more pairs]` - one photo to a clean transparent cutout (BiRefNet via rembg).
-- `engine/musicbed.py out.wav --dur 30 --bpm 120 [--drop 18]` - a synthesised music bed (no licence questions).
+- `engine/musicbed.py out.wav --dur 30 --bpm 120 [--drop 18]` - a synthesized music bed (no license questions).
 - `engine/measure.py {probe,track,fit,compare}` - measure a finished motion piece and fit springs to it.
 - `engine/spring.py` / `engine/spring.js` - the closed-form springs every animated tool uses.

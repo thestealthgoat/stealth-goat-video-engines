@@ -7,7 +7,7 @@ ap_helpers.py bursts <photos dir> <work dir> [--gap 2.0] [--min 5] [--long 1800]
     <work>/img/<stem>.jpg (upright, long edge --long px) and <work>/bursts.json
     [{"i": 0, "t0": "2026:05:02 14:03:11", "n": 14, "frames": [stems...]}, ...] in capture order.
 ap_helpers.py sheet <work dir> [--from 0] [--per 32]
-    Contact sheets of the bursts (first / middle / last frame, 4 bursts a row, --per bursts a sheet), each labelled
+    Contact sheets of the bursts (first / middle / last frame, 4 bursts a row, --per bursts a sheet), each labeled
     with its burst number and frame count: <work>/sheets/bursts_NN.jpg.
 ap_helpers.py plan <work dir> <picks.json> [--max 10]
     picks.json: [{"b": 3, "tag": "GAME 1", "opp": "VS ACME", "trim": 0}, ...] in play order (b = burst number,

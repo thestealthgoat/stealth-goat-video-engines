@@ -16,7 +16,7 @@ ffmpeg and compresses the GLB with `logo/node_modules/.bin/gltf-transform`.
 | `--anim` | `swing` | `swing`: seamless sway, rotY = 0.44 rad x sin, plus a small nod; never shows the back. `spin`: full 360 degree turn with a small tilt |
 | `--spin-seconds` | `4` | loop length in seconds (both animations) |
 | `--fps` | `60` | loop frame rate (integer) |
-| `--bg` | profile primary | MP4 background: `112233`, `'#112233'`, `0x112233`, or an ffmpeg colour name such as `black`. PNGs and the .mov stay transparent |
+| `--bg` | profile primary | MP4 background: `112233`, `'#112233'`, `0x112233`, or an ffmpeg color name such as `black`. PNGs and the .mov stay transparent |
 | `--drop-bg` | off | leave out a filled, hole-free rectangle that covers the whole canvas (an export background); prints what it dropped |
 | `--profile` | `$VIDEO_PROFILE`, then `local.json` | profile name or path to a `profile.json`; used for the default `--bg` |
 
@@ -35,12 +35,12 @@ The loop is seamless: frame `n` is the start again, so it can be set to loop in 
 ## How the look is made (`logo/render.html`)
 
 - Only filled paths are extruded. Paths with `fill="none"`, `transparent` or `fill-opacity="0"` are skipped.
-- Paint order is kept. A new layer starts each time the fill colour changes from one path to the next, and each
-  layer sits a small step in front of the one before (traced logos stack whole colour layers, so they come out
+- Paint order is kept. A new layer starts each time the fill color changes from one path to the next, and each
+  layer sits a small step in front of the one before (traced logos stack whole color layers, so they come out
   raised).
-- Neutral greys (saturation under 0.08, lightness 0.25 to 0.85) get a metal material; other colours get a glossy
-  clearcoat. Side walls are a darker shade of the face colour.
-- Tone mapping is neutral, so brand colours stay close to their hex values on the face.
+- Neutral grays (saturation under 0.08, lightness 0.25 to 0.85) get a metal material; other colors get a glossy
+  clearcoat. Side walls are a darker shade of the face color.
+- Tone mapping is neutral, so brand colors stay close to their hex values on the face.
 
 ## Timing and load
 
@@ -56,7 +56,7 @@ The loop is seamless: frame `n` is the start again, so it can be set to loop in 
 |---|---|
 | `paths 0` or parts missing | the SVG uses strokes or `fill="none"`; convert strokes to filled paths, or run logo-vectorize on a PNG export |
 | one big rectangle behind the logo | export background: rerun with `--drop-bg` |
-| a coloured part disappears in `check.png` | its colour equals the profile primary used by `preview.py`; composite on a contrasting colour (SKILL.md step 2) |
+| a colored part disappears in `check.png` | its color equals the profile primary used by `preview.py`; composite on a contrasting color (SKILL.md step 2) |
 | letters look swollen | lower `--depth` to `0.02` |
 | logo looks like a flat sticker | raise `--depth` to `0.04`-`0.05`, or a stronger `--hero` such as `"0.14,-0.40"` |
 | edges clip during the swing | lower `--fill` to `0.70` |

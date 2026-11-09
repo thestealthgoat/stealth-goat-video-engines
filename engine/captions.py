@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""captions.py - kinetic captions (E1): word-synced 1-4 word captions that spring in word by word, one keyword
+"""captions.py - kinetic captions: word-synced 1-4 word captions that spring in word by word, one keyword
 per caption in an outlined box. Burned-in MP4 + transparent caption layer (.mov, ProRes 4444) + .srt.
 
     python3 engine/captions.py <video> --out <dir> [--profile NAME] [--aspect 16:9|9:16]
@@ -727,7 +727,7 @@ def main(argv=None):
     ap.add_argument("--vertical-fill", choices=["auto", "band", "crop"], default="auto",
                     help="9:16 only. auto: shots that are portrait clips pillarboxed in the 16:9 fill the frame, "
                          "the rest sit as a band over a blurred copy (shots in <name>.fill.json, editable, reused "
-                         "on re-runs); band: always the band; crop: always the centre 9:16 crop")
+                         "on re-runs); band: always the band; crop: always the center 9:16 crop")
     a = ap.parse_args(argv)
 
     P = prof.load(a.profile)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""palette.py - brand colours -> UI colour tokens with MEASURED contrast (WCAG 2 relative luminance), and a checker.
+"""palette.py - brand colors -> UI color tokens with MEASURED contrast (WCAG 2 relative luminance), and a checker.
 
   palette.py make --primary "#0B3D2E" --accent "#F2B705" [--text "#FFFFFF"] [--write tokens.css]
   palette.py make --profile demo [--write tokens.css]      a brand profile in the engine folder ($VIDEO_ENGINE)
@@ -8,7 +8,7 @@
   palette.py ratio "#767676" "#ffffff"
 
 make prints a light theme (:root) and a dark theme (prefers-color-scheme: dark, unless data-theme="light"; and
-data-theme="dark"). Each colour is nudged until it passes, the same way the engine's website kit does it
+data-theme="dark"). Each color is nudged until it passes, the same way the engine's website kit does it
 (web/build.py palette()): text >= 7:1 on every ground, muted text, links and status text >= 4.5:1, labels on filled
 buttons >= 4.5:1, control borders, focus ring and button fills >= 3:1 against the page. --write replaces the block
 between "/* colours:start */" and "/* colours:end */" in a tokens.css and leaves everything else alone.
@@ -23,7 +23,7 @@ STATUS = {"danger": "#d92d20", "success": "#067647", "warning": "#b54708"}   # l
 def norm(c):
     c = c.strip().lstrip("#")
     if len(c) == 3: c = "".join(x * 2 for x in c)
-    if not re.fullmatch(r"[0-9a-fA-F]{6}", c): raise ValueError(f"not a hex colour: {c!r}")
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", c): raise ValueError(f"not a hex color: {c!r}")
     return "#" + c.lower()
 
 
@@ -55,7 +55,7 @@ def push(c, toward, grounds, need, step=0.12):
 
 
 def on(fill):
-    """the label colour for a filled control: near-black or white, whichever reads better"""
+    """the label color for a filled control: near-black or white, whichever reads better"""
     return INK if ratio(INK, fill) >= ratio(WHITE, fill) else WHITE
 
 
@@ -189,7 +189,7 @@ def check(path):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="brand colours -> measured UI colour tokens")
+    ap = argparse.ArgumentParser(description="brand colors -> measured UI color tokens")
     sub = ap.add_subparsers(dest="cmd", required=True)
     m = sub.add_parser("make"); m.add_argument("--primary"); m.add_argument("--accent"); m.add_argument("--text")
     m.add_argument("--profile", help="engine brand profile name (needs $VIDEO_ENGINE; else $VIDEO_PROFILE / local.json is used "
@@ -221,13 +221,13 @@ def main(argv=None):
         text = text or cols.get("text")
     if not prim: ap.error("give --primary (and --accent), or --profile-json")
     prim = norm(prim); acc = norm(acc or prim)
-    text = norm(text) if text and luma(norm(text)) > 0.5 else None     # a dark brand text colour is for light themes; dark uses white
+    text = norm(text) if text and luma(norm(text)) > 0.5 else None     # a dark brand text color is for light themes; dark uses white
     css, L, D = make_css(prim, acc, text)
     if a.write:
         s = open(a.write).read()
         new, k = re.subn(r"/\* colours:start.*?/\* colours:end \*/", lambda _: css, s, flags=re.S)
         if not k: print(f"make: no /* colours:start */ ... /* colours:end */ block in {a.write}"); return 1
-        open(a.write, "w").write(new); print(f"wrote colour tokens into {a.write}")
+        open(a.write, "w").write(new); print(f"wrote color tokens into {a.write}")
     else:
         print(css)
     return 0

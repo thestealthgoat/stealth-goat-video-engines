@@ -3,24 +3,24 @@
 
 stage3d.py <scene> <out_dir> <Name> [options] [--profile NAME]
 
-scenes (queue IDs):
-  data    E4  data scenes from --data (JSON sections: bars, cards (count-up score cards), points (point cloud / map));
-              the camera never stops (gentle dolly + hand-held drift) and travels section to section
-  orbit   O4  glass cards (--cards "A|B|C") orbit a presenter and pass in front of / behind them by depth;
-              --matte <name>_matte.json from engine/matte.py (O2) gives the plate and the cut-out
-  stack   P1  3D stack of real screenshots (--shots PNGs or --url pages, screenshotted with Playwright)
-  burst   P2  mesh-gradient ground, title cards (--lines "A|B|C") swapped behind light bursts (cuts printed)
-  badge   P3  two badges (--text1, --text2) fly in and clash (the one slam), sparks + shake
-  toggle  P3  a settings panel whose toggle switches (--labels "A|B|C") flip on with UI springs
-  props   P4  glossy icon props from simple 3D shapes (--icons check,star,heart,bolt,play,plus,pin,chat)
-  reveal  P5  brand glow -> phone (first shot on its screen) -> panels -> toast (--toast) -> tagline (--tagline)
-  hop     C2  mascot hop world: a mascot hops platform to platform on the word times of --text
-              (--words words.json | --chart | --wpm, like hopwords.py; --character art.png, else a placeholder bean)
-  fly     C3  UI flythrough over a tilted app screenshot; --focus JSON list of {x,y,w,h,label} (fractions)
-  extrude L6  3D extruded type flythrough: --text "WORD" (glyph outlines of the profile's head font) or --svg mark.svg;
-              the camera flies past the letters and lands square on the lockup (the hit)
+scenes:
+  data    data scenes from --data (JSON sections: bars, cards (count-up score cards), points (point cloud / map));
+          the camera never stops (gentle dolly + hand-held drift) and travels section to section
+  orbit   glass cards (--cards "A|B|C") orbit a presenter and pass in front of / behind them by depth;
+          --matte <name>_matte.json from engine/matte.py gives the plate and the cut-out
+  stack   3D stack of real screenshots (--shots PNGs or --url pages, screenshotted with Playwright)
+  burst   mesh-gradient ground, title cards (--lines "A|B|C") swapped behind light bursts (cuts printed)
+  badge   two badges (--text1, --text2) fly in and clash (the one slam), sparks + shake
+  toggle  a settings panel whose toggle switches (--labels "A|B|C") flip on with UI springs
+  props   glossy icon props from simple 3D shapes (--icons check,star,heart,bolt,play,plus,pin,chat)
+  reveal  brand glow -> phone (first shot on its screen) -> panels -> toast (--toast) -> tagline (--tagline)
+  hop     mascot hop world: a mascot hops platform to platform on the word times of --text
+          (--words words.json | --chart | --wpm, like hopwords.py; --character art.png, else a placeholder bean)
+  fly     UI flythrough over a tilted app screenshot; --focus JSON list of {x,y,w,h,label} (fractions)
+  extrude 3D extruded type flythrough: --text "WORD" (glyph outlines of the profile's head font) or --svg mark.svg;
+          the camera flies past the letters and lands square on the lockup (the hit)
 
-Every scene uses the H7 light standard (warm key with real shadows + cool rim + contact shadows) and springs only.
+Every scene uses the same light standard (warm key with real shadows + cool rim + contact shadows) and springs only.
 Outputs <Name>_<scene>.mp4 (on the profile ground, or a gradient / mesh); --alpha also writes <Name>_<scene>_Alpha.mov
 (ProRes 4444) with a transparent ground (shadows stay in the alpha). orbit writes the composite .mp4 plus
 <Name>_orbit_front_Alpha.mov and _back_Alpha.mov for the edit. The hit time (and cuts) print as "qa: --cuts ...".

@@ -1,13 +1,13 @@
 ---
 name: logo-motion
-description: Makes animated logo graphics from any SVG logo with the local video engine (logo/motion.py, three.js in headless Chromium, spring motion) - intro, outro end card, corner bug (in / loop / out), stinger, "presented by" sponsor lower third, slam-in for compositing, lit sign lockup, signature write-on, circle morph, pixel build, line build, echo stinger, light-streak write, light-painting story, kinetic word swaps, shatter into a new logo and a brand grid - as ProRes 4444 alpha .mov plus MP4 previews in the brand profile's colours and fonts, with an optional dark cinematic finish. Use when the user says "logo intro", "animate our logo", "logo reveal", "end card", "corner bug", "stinger transition", "presented by lower third", "sponsor lower third", "logo slam", "logo write-on", "word-swap lower third", "shatter the old logo into the new one", "rebrand reveal", "brand grid", "light painting animation" or "logo animation with a transparent background".
+description: Makes animated logo graphics from any SVG logo with the local video engine (logo/motion.py, three.js in headless Chromium, spring motion) - intro, outro end card, corner bug (in / loop / out), stinger, "presented by" sponsor lower third, slam-in for compositing, lit sign lockup, signature write-on, circle morph, pixel build, line build, echo stinger, light-streak write, light-painting story, kinetic word swaps, shatter into a new logo and a brand grid - as ProRes 4444 alpha .mov plus MP4 previews in the brand profile's colors and fonts, with an optional dark cinematic finish. Use when the user says "logo intro", "animate our logo", "logo reveal", "end card", "corner bug", "stinger transition", "presented by lower third", "sponsor lower third", "logo slam", "logo write-on", "word-swap lower third", "shatter the old logo into the new one", "rebrand reveal", "brand grid", "light painting animation" or "logo animation with a transparent background".
 ---
 
 # Logo motion
 
 Animate a logo with `logo/motion.py` in the engine folder. It draws the logo in 3D (three.js extrusion, the same
 builder as the **logo-3d** skill) or in 2D from the SVG's own outlines, adds text in the profile's fonts, light
-sweeps and panels in the profile's colours, and renders every frame with a transparent background. All motion uses
+sweeps and panels in the profile's colors, and renders every frame with a transparent background. All motion uses
 the engine's spring presets (`logo/spring.js`), so nothing moves on a fixed-duration ease. Everything runs locally;
 nothing is uploaded.
 
@@ -20,8 +20,8 @@ The full template list (length, what it does, text fields, printed hit or cut, Q
    https://github.com/thestealthgoat/stealth-goat-video-engines) and run every command from it:
    `cd "$VIDEO_ENGINE" && python3 logo/motion.py ...`. If `$VIDEO_ENGINE` is unset or the folder has no
    `logo/motion.py`, ask the user where the engine is, or set it up (the **getting-started** skill walks through
-   it): `git clone https://github.com/thestealthgoat/stealth-goat-video-engines`, then `./setup.sh` in it (it
-   targets macOS with Homebrew), then `export VIDEO_ENGINE=/path/to/stealth-goat-video-engines`. Do not guess a
+   it): `git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine`, then `./setup.sh` in it (it
+   targets macOS with Homebrew), then `export VIDEO_ENGINE="$HOME/video-engine"`. Do not guess a
    path.
 2. Check the logo tools once per machine: `./setup.sh --check` in the engine folder (installs nothing). It must find
    `logo/node_modules/three` and Playwright Chromium. The engine's setup targets macOS with Homebrew: on another
@@ -36,7 +36,7 @@ The full template list (length, what it does, text fields, printed hit or cut, Q
    brand profile if they have one; to make one, copy `profiles/_template` with
    `python3 engine/vprofile.py new <name> --display "ACME Studio" --primary "#112233" --accent "#E04050"` (see
    `docs/LAYOUT.md`), or run the **getting-started** skill. To try things, use `--profile demo`: the repo ships it
-   with its fonts (Anton and Barlow Condensed, OFL licences beside them) and a sample logo
+   with its fonts (Anton and Barlow Condensed, OFL licenses beside them) and a sample logo
    `profiles/demo/assets/demo_logo.png`.
 4. Check the profile's fonts: `python3 engine/vprofile.py show <name> --check`. Every `font` line must resolve:
    motion.py stops with an error rather than draw text in a fallback font. Missing paths and logo files in the
@@ -57,7 +57,7 @@ templates on a fresh clone: `assets/acme_mark.svg` (a hexagon badge with a lette
 - The SVG must be valid XML. A broken file (for example `--` inside an XML comment) renders an **empty** 3D logo
   with no error, and the 2D templates stop with "The source image cannot be decoded". The stills in step 3 catch it.
 - Use the logo's light version when it will sit on a dark background (and the reverse); motion.py keeps the SVG's
-  own fill colours.
+  own fill colors.
 
 ## 2. Pick the template
 
@@ -95,7 +95,7 @@ python3 logo/motion.py "$SKILL/assets/acme_mark.svg" out/ ACME intro --profile d
 python3 logo/preview.py out/look.png out/ACME_intro_t0.50.png out/ACME_intro_t1.50.png out/ACME_intro_t3.50.png --profile demo
 ```
 
-`preview.py` composites the stills on the profile's primary colour and stacks them. `Read` `out/look.png` and check:
+`preview.py` composites the stills on the profile's primary color and stacks them. `Read` `out/look.png` and check:
 the logo is there (not empty), text is spelled right and fits, nothing collides with the logo or crosses the safe
 area (`layout.safe_px` in the profile), and the sponsor art matches what the user supplied. Show the stills to the
 user when the look is a choice they should make.
@@ -109,7 +109,7 @@ python3 logo/motion.py "$SKILL/assets/acme_mark.svg" out/ ACME intro --profile d
 ```
 
 - Outputs `out/<Name>_<template>_Alpha.mov` (ProRes 4444 with alpha, 1080p60 by default) and
-  `out/<Name>_<template>.mp4` (a preview on `--bg`, default the profile's primary colour; `--bg 112233` or
+  `out/<Name>_<template>.mp4` (a preview on `--bg`, default the profile's primary color; `--bg 112233` or
   `--bg '#112233'`, quoted because `#` starts a shell comment).
 - motion.py prints one line per clip, for example `writeon: 4.5 s, hit at 1.858 s (frame 111; qa: --cuts 1.858)`,
   or `cut at 0.55 s` for stingers. Keep that number: QA needs it, and an editor needs the cut point.
@@ -143,7 +143,7 @@ real person.
 
 ## 5. Compositing into an edit
 
-For a logo that lands inside a shot (show opens, promos), render a transparent PNG sequence at the edit's frame
+For a logo that lands inside a shot (intros, promos), render a transparent PNG sequence at the edit's frame
 rate instead of a movie:
 
 ```bash
@@ -151,9 +151,9 @@ python3 logo/motion.py "$SKILL/assets/acme_mark.svg" out/ ACME slam --profile de
 ```
 
 This writes `out/ACME_slam_seq/f00000.png ...`. `--place cx,cy,bw,bh` is the landing box in frame fractions
-(centre x, centre y, max width, max height; `slam` and `writeon`). In the compositor, frame index =
+(center x, center y, max width, max height; `slam` and `writeon`). In the compositor, frame index =
 round((t - hit time) × fps) to line the hit up with a beat; alpha-composite over the shot. Land the logo on a calm
-area or a solid band so its colours don't sit on the same colour.
+area or a solid band so its colors don't sit on the same color.
 
 ## 6. QA before delivery
 
@@ -211,8 +211,8 @@ loop is seamless and the in and out clips start and end in the loop's pose.
 
 ## Rules
 
-- Brand colours and fonts come from the profile only; never hard-code a brand's values in a command or a template.
-  `--accent` overrides only the outro's second line colour.
+- Brand colors and fonts come from the profile only; never hard-code a brand's values in a command or a template.
+  `--accent` overrides only the outro's second line color.
 - Keep each template generic: any SVG, any profile.
 - A new template goes into `TEMPLATES` in `logo/motion.html`: a function of time that returns the logo placement,
   glint, texts and panels. Use the spring presets (logo lands `bouncy` or `slam`, panels and text `snappy`, pushes

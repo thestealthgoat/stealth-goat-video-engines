@@ -18,7 +18,7 @@ every cut frame by frame, every time.
 1. Check `$VIDEO_ENGINE` (`echo "$VIDEO_ENGINE"`). If it is unset or has no `engine/qa.py`, ask the user where their
    clone is, or run the `getting-started` skill. With no clone yet, set one up (`setup.sh` targets macOS with
    Homebrew):
-   `git clone https://github.com/thestealthgoat/stealth-goat-video-engines && cd stealth-goat-video-engines && ./setup.sh && export VIDEO_ENGINE="$PWD"`.
+   `git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine && cd ~/video-engine && ./setup.sh && export VIDEO_ENGINE="$HOME/video-engine"`.
    Run every engine command from there: `cd "$VIDEO_ENGINE" && python3 engine/qa.py ...`.
 2. Pick the profile: the delivery spec (size, fps, loudness, true peak, safe area) comes from it. Pass
    `--profile <name>`, else `$VIDEO_PROFILE`, else the default in `local.json`. Use the profile the video was made
@@ -77,7 +77,7 @@ option details, frame-rate rules and output fields are in [references/gates.md](
 1. Read `review.md` completely: verdict, fix lines, gate table, spec, loudness, shot table, manual checks.
 2. `Read` `sheet.jpg`: the timeline, one frame per shot with the safe area as a cyan box, and an evidence strip
    (before | flagged | after) for each of the worst flags.
-3. Judge every FAIL and WARN by its frames: **real**, **intended** or **false alarm**, and write the judgement next to
+3. Judge every FAIL and WARN by its frames: **real**, **intended** or **false alarm**, and write the judgment next to
    the flag in `review.md`. Intended things go into the declaration (a planned cut into `--cuts`, a still into
    `--holds`, a designed exception into `--intended`, an overlay into `--kind loop`) and the run is repeated, so the
    record stays clean.
@@ -90,7 +90,7 @@ Make the sheets with the helper:
 python3 <this skill's folder>/scripts/frames.py <video> --qa <qa review dir> --out <qa review dir>/frames
 ```
 
-It writes `contact_<t>s.jpg` (4 frames a second, 10 s a sheet, each tile labelled with time and frame),
+It writes `contact_<t>s.jpg` (4 frames a second, 10 s a sheet, each tile labeled with time and frame),
 `cut_f<N>.jpg` for every detected and every planned cut (4 frames before, 4 after, exact frame numbers, the first
 frame of the new shot outlined) and `flag_f<A>-f<B>.jpg` for every flag span up to 2 s, frame by frame.
 

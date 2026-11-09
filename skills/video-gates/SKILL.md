@@ -66,7 +66,7 @@ python3 engine/qa.py <video> --kind explainer --cuts <planned cuts or none> [--m
   timestamp gaps or uneven frames (look at the stutter flags and the part joins), so treat it as a real issue to
   judge, not noise.
 - Repeats on a regular cadence (29.97 material in a 59.94 file, 3:2 pulldown, a steady slow-motion conform) are
-  recognised and reported once as a cadence note, not as stutters; a repeat that breaks the cadence is still a
+  recognized and reported once as a cadence note, not as stutters; a repeat that breaks the cadence is still a
   stutter. `--allow-stutter` (skip the repeat check) only when irregular repeats are there on purpose.
 - `--silences a-b` declares planned silences. `--out <dir>` sets the review folder (default `./qa_<name>/`).
 - Exit code: 0 PASS, 1 FAIL, 2 unreadable file.
@@ -85,7 +85,7 @@ PASS, WARN, FAIL, SKIP (not run, e.g. no audio or `--kind loop`) or INFO (declar
 1. Read `review.md` completely.
 2. `Read` `sheet.jpg`. Look at one frame per shot: composition, faces, text, contact.
 3. For every FAIL and WARN, open its evidence strip and judge it by frame: **real**, **intended** or
-   **false alarm**. Write the judgement next to the flag in `review.md`. Intended things (a planned flash cut, a
+   **false alarm**. Write the judgment next to the flag in `review.md`. Intended things (a planned flash cut, a
    declared hold) go into the cut list or `--holds` (a designed end hold or a deliberately soft opening into
    `--intended`, a loop or overlay into `--kind loop`) and the run is repeated, so the record stays clean.
 4. Do the manual checks the machine cannot (listed in `review.md`), cropping frames with ffmpeg where needed:
@@ -94,7 +94,7 @@ PASS, WARN, FAIL, SKIP (not run, e.g. no audio or `--kind loop`) or INFO (declar
    leaks; nothing cut by the frame edge; continuity across cuts.
 5. Sound is measured, not heard: say so, and ask a person to listen before acceptance.
 
-## 3. Fresh-eyes reviewer (H4)
+## 3. Fresh-eyes reviewer
 
 You built it, so you never grade it. Spawn a sub-agent with **no context**: it gets only `sheet.jpg` (and any frame
 crops or evidence strips you made) plus `review.md`, and, when there is one, the previous version's sheet and

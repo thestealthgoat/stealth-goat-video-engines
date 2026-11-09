@@ -18,17 +18,17 @@ type, any transform) and land the SVG's own fills as a hit.
 | Template | Kind | Length | What it does | Text and options |
 |---|---|---|---|---|
 | `intro` | 3D | 4 s | Logo flies in from the camera with a turn, lands on a hit at 0.5 s, pushes in slowly under a light sweep (1.5 s), settles at about 2.25 s and holds the last frame | `--text1` optional line under the logo |
-| `outro` | 3D | 6 s | End card: logo drops in and bounces at about 0.45 s, two lines slide up, sweep, gentle sway, all fade out by 6 s | `--text1` big line (head font), `--text2` small line in the accent (`--accent` overrides its colour) |
+| `outro` | 3D | 6 s | End card: logo drops in and bounces at about 0.45 s, two lines slide up, sweep, gentle sway, all fade out by 6 s | `--text1` big line (head font), `--text2` small line in the accent (`--accent` overrides its color) |
 | `bug` | 3D | 1 s in + 6 s loop + 0.8 s out | Corner logo bottom-right inside the safe area; writes three clips `bug_in`, `bug_loop` (seamless), `bug_out` for a switcher | none |
-| `stinger` | 3D | 1.2 s | Primary-colour panel with accent edges wipes the full frame, logo hits centre; frame fully covered at the **cut, 0.55 s (printed)** | none |
-| `presented` | 3D | 5 s | Lower-third bar in the primary colour: the logo + "PRESENTED BY" + the sponsor's logo, wipes off by 4.9 s | `--text1` (default PRESENTED BY), `--sponsor path.png` (use the sponsor's light version on a dark bar) |
+| `stinger` | 3D | 1.2 s | Primary-color panel with accent edges wipes the full frame, logo hits center; frame fully covered at the **cut, 0.55 s (printed)** | none |
+| `presented` | 3D | 5 s | Lower-third bar in the primary color: the logo + "PRESENTED BY" + the sponsor's logo, wipes off by 4.9 s | `--text1` (default PRESENTED BY), `--sponsor path.png` (use the sponsor's light version on a dark bar) |
 | `slam` | 3D | 2 s (`--dur`) | Logo flies in from behind the camera with a turn, lands with a bounce at 0.42 s, light sweep, slow drift. Made for compositing | `--place cx,cy,bw,bh` landing box; `--png-seq` |
 | `lockup` | 2D sign | 4.17 s | Camera tilts down and settles onto a lit sign; three lines flicker on, with motion blur and grain | `--text1` small top line (default the profile's display name), `--text2` outlined headline in the accent, `--text3` spaced subline, `--plate still.png` background the camera moves over (else a drawn sign). Always pass all three lines: the defaults are placeholders |
 | `writeon` | 2D | 4.5 s (`--dur`) | Signature write-on: one glowing pen traces every outline (sparks in the accent), then the fills land as a hit (spring pop, accent bloom, spark burst) at 0.86 x the pen time, two light sweeps, slow push | `--text1` optional line; `--write S` pen time (default 48% of the length, at most 2.2 s); `--place` |
 | `morph` | 2D | 3.6 s (`--dur`) | One circle per part of the logo (letters, counters) floats in, drifts onto its part and morphs point by point into the real outline; fills land as a hit (pop, bloom, two sweeps), slow push | `--text1` optional line |
-| `pixelbuild` | 2D | 3.4 s (`--dur`) | The logo sampled onto a dot grid; dots spring out from the centre (staggered by distance), glow as they land, then the clean mark resolves over them | `--text1` optional line |
+| `pixelbuild` | 2D | 3.4 s (`--dur`) | The logo sampled onto a dot grid; dots spring out from the center (staggered by distance), glow as they land, then the clean mark resolves over them | `--text1` optional line |
 | `linebuild` | 2D | 7.5 s | Outline pieces race in from off-frame and lock onto the logo, fills land, then three mockups: a construction grid draws on, the mark as a profile-page avatar, the mark pressed into fabric | `--text1` the profile-page name (default the profile's display name) |
-| `echo` | 2D | 1.2 s | Outline stinger: echoes of the outline ripple out, a primary-colour panel swells from the mark and covers the frame at the **cut, 0.55 s (printed)**, then shrinks back and clears | none |
+| `echo` | 2D | 1.2 s | Outline stinger: echoes of the outline ripple out, a primary-color panel swells from the mark and covers the frame at the **cut, 0.55 s (printed)**, then shrinks back and clears | none |
 | `lightstreak` | 2D | 3.5 s (`--dur`) | A point of light with a long fading trail writes the outline (additive bloom), light streaks race across like timeline tracks, fills land as a hit | `--text1` optional line |
 | `lightpaint` | 2D story | 2.4 s a scene + 0.8 s | Each top-level `<g>` of the SVG is a scene, laid side by side; one light draws them in turn, the camera follows, trails stay; ignite hit at 0.08 s (printed). Use with `--finish dark` | none. Sample art: `logo/stories/placeholder_story.svg` (in the engine) or this skill's `assets/story_example.svg` |
 | `swap` | text | 0.9 s a word + 1.5 s | Kinetic word swaps: letters rise into the slot one by one, the old word leaves upward, the slot springs to the new width, the last word lands in the accent with an underline (hit printed). The logo file is still required but not drawn | `--text1 "___ is next"` (the line; `___` marks the slot, else the slot follows the line), `--text2 "a\|b\|c"` the words in turn |
@@ -44,15 +44,15 @@ type, any transform) and land the SVG's own fills as a hit.
 |---|---|
 | `--frames 0.5,1.5,3` | Stills only (transparent PNGs `<Name>_<template>_t0.50.png` ...). Use before every render |
 | `--fps`, `--size` | Frame rate (default 60) and size (default 1920x1080) |
-| `--bg` | Background of the .mp4 preview only (default the profile's primary colour); the .mov keeps alpha |
+| `--bg` | Background of the .mp4 preview only (default the profile's primary color); the .mov keeps alpha |
 | `--depth` | 3D extrusion depth as a fraction of the logo width (default 0.03) |
 | `--dur` | Overrides the length (most useful on `slam`, `writeon`, `morph`, `pixelbuild`, `lightstreak`) |
 | `--png-seq` | Writes `<Name>_<template>_seq/f00000.png ...` instead of encoding a movie |
 | `--finish dark` | Cinematic finish: dark radial stage, a reflective floor mirrored at the content's lowest point (blurred, fading), bloom under the content (the logo stays sharp), film grain, vignette. Output is opaque |
 | `--mockup laptop` | With `--finish`: the finished frame on a laptop screen with a glass reflection |
-| `--profile` | Colours (`brand.colors.primary`, `accent`, `text`) and fonts (`brand.fonts.head`, `body`, `body_semibold`) |
+| `--profile` | Colors (`brand.colors.primary`, `accent`, `text`) and fonts (`brand.fonts.head`, `body`, `body_semibold`) |
 
-Profile block for the finish (any key; colours may be hex or profile colour names):
+Profile block for the finish (any key; colors may be hex or profile color names):
 
 ```json
 "finish": {"dark": {"bg": "#05070A", "bg2": "#161B22", "bloom": 0.5, "floor": 0.3, "dof": 6, "grain": 0.3, "vignette": 0.55}}
@@ -95,4 +95,4 @@ a template still fails a gate otherwise, the cause is its timing: report it to t
 | "writeon: found no outlines to draw" | The SVG has no path / circle / rect / line / polygon shapes (an embedded bitmap). Vectorize it first |
 | "font load failed" | A profile font path is wrong; run `python3 engine/vprofile.py show <name> --check` |
 | "unknown template" | Typo; the error lists the available templates |
-| Logo colours vanish on the preview | The fill matches `--bg` or the profile primary; use the logo's light or dark version |
+| Logo colors vanish on the preview | The fill matches `--bg` or the profile primary; use the logo's light or dark version |

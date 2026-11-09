@@ -60,7 +60,7 @@ def main():
     ap.add_argument("--still-only", action="store_true")
     ap.add_argument("--spin-seconds", type=float, default=4)
     ap.add_argument("--fps", type=int, default=60)
-    ap.add_argument("--bg", help="background hex for the .mp4, 112233 or '#112233' (default: profile primary colour)")
+    ap.add_argument("--bg", help="background hex for the .mp4, 112233 or '#112233' (default: profile primary color)")
     ap.add_argument("--anim", default="swing", choices=["swing", "spin"], help="swing = seamless +/-25 deg sway (always readable); spin = full turn")
     ap.add_argument("--hero", default="0.10,-0.30", help="rotX,rotY radians for the hero still")
     ap.add_argument("--drop-bg", action="store_true", help="leave out a filled rectangle covering the whole canvas "

@@ -16,7 +16,7 @@ statcard.py <stats.json> <out_dir> [--name N] [--size WxH] [--fps N] [--dur 5.5]
   "count": true, "logo": true}`. Only `name` and `stats` (2-4 pairs; `{"label", "value"}` objects work too) are
   required. `photo` defaults to `<profile paths.headshot_cutouts>/<num>.png` when that file exists.
 - Size and fps default to the profile's `delivery`. The card leaves at `--dur - 0.35` s.
-- Colours: profile `primary`, `accent`, `text` (+ `text_dim`, `primary_deep` when present, else derived); fonts
+- Colors: profile `primary`, `accent`, `text` (+ `text_dim`, `primary_deep` when present, else derived); fonts
   `head`, `body`, `body_semibold`; logo `brand.logo_png` (top right of the panel); position from `layout.safe_px`
   unless `--x0/--x1/--y1` move it.
 - Outputs: `<name>_stats_Alpha.mov` (ProRes 4444, full frame), `<name>_stats.mp4` (preview on `--bg`, default the
@@ -33,12 +33,12 @@ behind.py <video> --out DIR [--name N] [--t0 S] [--t1 S] (--text "WORD" | --even
 ```
 - `--events`: `[{"text": "WORD", "t0": 1.2, "t1": 3.4}, ...]`, seconds inside the window.
 - `--auto`: a faster-whisper words file (times in source seconds). One keyword per phrase (numbers, names, repeated
-  or emphasised nouns), at least `--every` seconds apart, shown from just before it is said to the end of its phrase.
+  or emphasized nouns), at least `--every` seconds apart, shown from just before it is said to the end of its phrase.
 - Layers back to front: shot, text, person. The matte runs first (`engine/matte.py`, BiRefNet) unless `--matte`
   points at a `<name>_matte.mp4` made from the same window.
-- Look: profile head font, cap height `--size` of the frame, never wider than the safe area, centred on the head.
+- Look: profile head font, cap height `--size` of the frame, never wider than the safe area, centered on the head.
   `--fill gradient` uses `brand.gradient`, else accent to text.
-- Outputs: `<name>_behind.mp4` (sound cut sample-exactly, levelled to the profile loudness, faint room tone under
+- Outputs: `<name>_behind.mp4` (sound cut sample-exactly, leveled to the profile loudness, faint room tone under
   it), `<name>_behind.events.json` (what was shown; edit and pass back with `--events`), with `--layer`
   `<name>_behind_text_Alpha.mov` (the text with the person cut out, for the editor).
 - Default name: the video's file name.
@@ -51,7 +51,7 @@ quote.py --text "..." --by "Name" [--role "..."] --out DIR [--name quote]
          [--dur S] [--fps 29.97] [--size 1920x1080] [--frames t1,t2] [--profile P]
 ```
 - The person: one frame of the matte's `_Alpha.mov` at `--at`, or any cut-out PNG (`engine/cutout.py in.jpg out.png`).
-- Ground: the video blurred and darkened (default: the matte's own video), or a flat colour.
+- Ground: the video blurred and darkened (default: the matte's own video), or a flat color.
 - Font: the profile's `quote` font role if it has one, else the bundled serif `resources/fonts/Fraunces-SoftSemiBold.ttf`.
 - Outputs: `<name>_quote.mp4`, `<name>_quote_Alpha.mov` (the card without the ground).
 - Only real quotes the user supplies or that are in the footage.
@@ -63,9 +63,9 @@ progressbar.py <video> --out DIR [--name N] [--t0 S] [--t1 S] (--face face.png |
                [--chapters chapters.json] [--fps N] [--frames t1,t2] [--profile P]
 ```
 - `--chapters`: `[{"t": 0, "title": "Welcome"}, {"t": 95.5, "title": "The story"}]`, seconds of the video.
-- `--face`: any image; cropped to a circle around its alpha or centre. `--matte`: the face from the first matte frame.
-- The fill moves at the real clock; everything else springs. Colours: accent (fill, ring), text (titles), primary (track).
-- Outputs: `<name>_progress_Alpha.mov` (ProRes 4444 full frame, to lay over the programme), `<name>_progress.mp4`
+- `--face`: any image; cropped to a circle around its alpha or center. `--matte`: the face from the first matte frame.
+- The fill moves at the real clock; everything else springs. Colors: accent (fill, ring), text (titles), primary (track).
+- Outputs: `<name>_progress_Alpha.mov` (ProRes 4444 full frame, to lay over the program), `<name>_progress.mp4`
   (bar over the video window, with sound). Default name: the video's file name. fps defaults to the video's.
 
 ## beforeafter.py: before / after showcase
@@ -74,8 +74,8 @@ progressbar.py <video> --out DIR [--name N] [--t0 S] [--t1 S] (--face face.png |
 beforeafter.py --before A --after B --out DIR [--name showcase] [--a0 S] [--b0 S] [--dur 6.5]
                [--labels "BEFORE|AFTER"] [--fps 29.97] [--size 1920x1080] [--frames t1,t2] [--profile P]
 ```
-- A and B: videos or stills with the same framing. The accent-coloured divider sweeps in, holds, scrubs back to
-  BEFORE and across to AFTER, then clears to AFTER whole. Sound from B, levelled.
+- A and B: videos or stills with the same framing. The accent-colored divider sweeps in, holds, scrubs back to
+  BEFORE and across to AFTER, then clears to AFTER whole. Sound from B, leveled.
 - Output: `<name>_ba.mp4`. Vertical: `--size 1080x1920`.
 
 ## sketch.py: sketch to real shot
@@ -85,7 +85,7 @@ sketch.py <video|still> --out DIR [--name sketch] [--t0 S] [--dur 6] [--draw 2.2
           [--frames t1,t2] [--profile P]
 ```
 - The first frame's edges draw stroke by stroke, a pencil shade settles in, then the real footage paints in from
-  the action outward and plays on. OpenCV only. Paper is the profile `text` colour, ink its `primary`.
+  the action outward and plays on. OpenCV only. Paper is the profile `text` color, ink its `primary`.
 - Output: `<name>_sketch.mp4` with the source's sound from where the footage starts.
 
 ## routemap.py: route draw-on

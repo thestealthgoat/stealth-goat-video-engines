@@ -12,7 +12,7 @@
  * Use (browser): <script src="spring.js"></script>  →  Spring.at(t, {from:0, to:1, start:0.35, ...Spring.PRESETS.snappy})
  * Use (node):    const Spring = require('./spring.js')
  *
- * Camera and impact helpers (same names and maths in spring.py):
+ * Camera and impact helpers (same names and math in spring.py):
  *   const [dx, dy] = Spring.handheld(t, 6, 0.6, 3);           // deterministic hand-held drift (amp, freq Hz, seed)
  *   y += Spring.shake(t, 2.40, 14, 9, 13);                     // impact shake from the hit frame (hit, amp, decay, freq)
  *   const cam = Spring.camera_at(t, [{ t: 0, x: 0, y: 0, zoom: 1 },

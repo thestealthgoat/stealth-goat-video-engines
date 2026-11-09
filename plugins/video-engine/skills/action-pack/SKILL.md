@@ -1,6 +1,6 @@
 ---
 name: action-pack
-description: Turns burst photos from a game, race or event into a fast stop-motion "action pack" video (vertical 1080x1920 and/or 16:9 1920x1080) with the brand's colours, fonts and logo, synthesized shutter clicks and a music bed, using the engine's flipbook.py. Use when the user says "action pack", "stop-motion from these bursts", "burst flipbook", "turn my burst photos into a video", "photo flipbook reel" or "stop-motion recap from the game photos".
+description: Turns burst photos from a game, race or event into a fast stop-motion "action pack" video (vertical 1080x1920 and/or 16:9 1920x1080) with the brand's colors, fonts and logo, synthesized shutter clicks and a music bed, using the engine's flipbook.py. Use when the user says "action pack", "stop-motion from these bursts", "burst flipbook", "turn my burst photos into a video", "photo flipbook reel" or "stop-motion recap from the game photos".
 ---
 
 # Action pack (burst flipbook)
@@ -15,8 +15,8 @@ Exact formats, layout and timing: [references/flipbook.md](references/flipbook.m
 
 - Find the engine: `echo "$VIDEO_ENGINE"`. If it is empty or the folder has no `engine/flipbook.py`, ask the user
   where their clone is, or set it up (the `getting-started` skill walks through it):
-  `git clone https://github.com/thestealthgoat/stealth-goat-video-engines`, then `cd stealth-goat-video-engines &&
-  ./setup.sh` (it targets macOS with Homebrew), then `export VIDEO_ENGINE="$PWD"`. Run every engine command as
+  `git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine`, then `cd ~/video-engine &&
+  ./setup.sh` (it targets macOS with Homebrew), then `export VIDEO_ENGINE="$HOME/video-engine"`. Run every engine command as
   `cd "$VIDEO_ENGINE" && python3 engine/<tool>.py ...`.
 - Pick the profile: `--profile <name>` on every command (else `$VIDEO_PROFILE`, else `local.json`). Use `demo` to try
   things: it ships with the engine (`profiles/demo`, with its fonts and `assets/demo_logo.png`). A user's own profile
@@ -34,8 +34,8 @@ Exact formats, layout and timing: [references/flipbook.md](references/flipbook.m
 
 ## What the public engine does and does not do
 
-- Does: renders the reel from JPEG frames and a plan, in profile colours/fonts/logo; synthesizes shutter clicks and
-  low booms (no licence needed); vertical by default, `--wide` for 16:9; end card from a folder of 1920x1080
+- Does: renders the reel from JPEG frames and a plan, in profile colors/fonts/logo; synthesizes shutter clicks and
+  low booms (no license needed); vertical by default, `--wide` for 16:9; end card from a folder of 1920x1080
   transparent PNG frames (`--slam DIR`) or, without `--slam`, from the profile's `brand.logo_3d_swing_alpha_mov`.
 - Does not: read RAW files, add music, write a cut list, or offer a layout preview mode. The words "ACTION PACK" and
   "BURST NN/NN" are fixed in the tool; change only what its flags and the plan allow. Do not edit engine code to get
@@ -127,7 +127,7 @@ the fix is a pack-only copy of the profile whose logo is padded with transparent
 python3 "$H" packprofile <profile> "$WORK/profile_pack"     # then use --profile "$WORK/profile_pack" on flipbook.py only
 ```
 
-The corner logo on the burst frames then comes out smaller and a little in from the corner (it is centred in the
+The corner logo on the burst frames then comes out smaller and a little in from the corner (it is centered in the
 padded box); tell the user. Keep the real profile for musicbed, qa and everything else. Then render the full plan,
 one render at a time (vertical first, then wide; never both at once):
 
@@ -142,7 +142,7 @@ frames in `<out>_frames/`). Swap `demo` for the user's profile.
 ### 6. Music bed and loudness
 
 Flipbook's own track is clicks and booms over silence. That fails the engine's audio rule (no hard audio cuts: each
-click stops abruptly into silence) and is not levelled. Always lay a bed under it and level the mix:
+click stops abruptly into silence) and is not leveled. Always lay a bed under it and level the mix:
 
 ```bash
 D=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$WORK/pack_vert.mp4")
@@ -155,7 +155,7 @@ ffmpeg -nostdin -v error -y -i "$WORK/pack_vert.mp4" -i "$WORK/bed.wav" -filter_
   `delivery.true_peak_db`.
 - The video is re-encoded, not copied: flipbook's file is full-range `yuvj420p` (it is built from JPEG frames), and
   the `scale=in_range=pc:out_range=tv` step turns it into the standard `yuv420p` the delivery spec and the platforms
-  expect, with the same colours.
+  expect, with the same colors.
 - A track the user owns or has cleared can replace `bed.wav` (trim it to `$D` with a fade-out). Never use music the
   user has no rights to.
 - Do the same for `pack_wide.mp4` -> `pack_wide_final.mp4` (same `bed.wav`: both renders have the same length).

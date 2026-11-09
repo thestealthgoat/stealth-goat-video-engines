@@ -1,11 +1,11 @@
 {
   "template": "w5",
   "profile": "demo",
-  "title": "Jane Doe Studio · Video, live events and design",
-  "description": "Jane Doe Studio makes video, runs live event streams and designs graphics, and builds its own tools for the repeat work.",
-  "brand_text": "JANE DOE STUDIO",
+  "title": "Northlight Studio · Architecture and interiors photography",
+  "description": "Northlight Studio photographs homes, hotels and workplaces for architects, interior designers and builders.",
+  "brand_text": "NORTHLIGHT STUDIO",
   "business": {
-    "legal_name": "Jane Doe Studio",
+    "legal_name": "Northlight Studio",
     "email": "hello@example.com"
   },
   "legal": {
@@ -14,11 +14,11 @@
   "nav": [
     {
       "id": "work",
-      "label": "Work"
+      "label": "Portfolio"
     },
     {
-      "id": "engine",
-      "label": "Tools"
+      "id": "how",
+      "label": "Process"
     },
     {
       "id": "contact",
@@ -26,40 +26,40 @@
     }
   ],
   "hero": {
-    "label": "Jane Doe Studio: video, live events and design",
-    "eyebrow": "Video · Live events · Design",
+    "label": "Northlight Studio: architecture and interiors photography",
+    "eyebrow": "Architecture · Interiors · Photography",
     "headline": [
-      "Live shows.",
-      "Short films.",
-      "Tools we build."
+      "Rooms.",
+      "Light.",
+      "Lines."
     ],
-    "text": "Jane Doe Studio is a fictional studio used to show this template. It streams live events, makes short videos and graphics, and writes its own software for editing, motion graphics and the web.",
+    "text": "Northlight Studio is a fictional studio used to show this template. Jane Doe and a small team photograph buildings and the rooms inside them for the architects, designers and builders who made them.",
     "cta": {
-      "label": "Get in touch",
+      "label": "Book a shoot",
       "href": "#contact"
     },
     "cta2": {
-      "label": "See the work",
+      "label": "See the portfolio",
       "href": "#work"
     },
     "chapters": [
       {
         "at": 0.2,
-        "kicker": "01 · Live",
-        "title": "Live event streams",
-        "text": "Multi-camera streams for talks, concerts and games, with a small crew and a clear plan."
+        "kicker": "01 · Residential",
+        "title": "Homes, inside and out",
+        "text": "New builds, renovations and single rooms, shot in the light the architect designed for."
       },
       {
         "at": 0.46,
-        "kicker": "02 · Video and design",
-        "title": "Video and graphics",
-        "text": "Short films, titles, social clips and the graphics that run on screen during an event."
+        "kicker": "02 · Hospitality",
+        "title": "Hotels, restaurants and bars",
+        "text": "Lobbies, guest rooms and dining rooms, styled and shot before the doors open to guests."
       },
       {
         "at": 0.72,
-        "kicker": "03 · Tools",
-        "title": "A video engine we build ourselves",
-        "text": "Small tools that handle the repeat work of video, so the time goes into the parts that need a person."
+        "kicker": "03 · Workplaces",
+        "title": "Offices and studios",
+        "text": "Open floors, meeting rooms and shared spaces that show how a workplace is used day to day."
       }
     ],
     "glass": {
@@ -71,63 +71,63 @@
     {
       "type": "features",
       "id": "work",
-      "eyebrow": "The work",
-      "title": "Three kinds of work",
+      "eyebrow": "Portfolio",
+      "title": "Three kinds of space",
       "items": [
         {
-          "title": "Live event streaming",
-          "text": "Multi-camera live streams: planning, graphics and the live production, from the first camera check to the last frame."
+          "title": "Residential",
+          "text": "Houses, apartments and remodels, from the street view to the details of a kitchen or stair."
         },
         {
-          "title": "Video and design",
-          "text": "Short films, social clips, title cards and event graphics, all built from one consistent brand."
+          "title": "Hospitality",
+          "text": "Hotels, restaurants and cafes, with wide establishing shots and close details for menus and booking pages."
         },
         {
-          "title": "Our own video engine",
-          "text": "A growing set of tools for cutting highlights, editing talking-head video, making motion graphics and explainers, and building sites like this one."
+          "title": "Workplaces",
+          "text": "Offices, labs and co-working floors for design awards, leasing brochures and company sites."
         }
       ]
     },
     {
       "type": "process",
       "id": "how",
-      "eyebrow": "How we work",
-      "title": "Plan it, build it once, run it",
+      "eyebrow": "Process",
+      "title": "From walk-through to final files",
       "steps": [
         {
-          "title": "Start with the plan",
-          "text": "Run sheets, crew positions and checklists are ready before anything goes live."
+          "title": "Walk the space",
+          "text": "A short visit or video call to agree the shot list and note where the light falls at each hour."
         },
         {
-          "title": "Build pieces that can be reused",
-          "text": "Templates for graphics, titles and edits, so each project starts from something that already works."
+          "title": "Plan the day",
+          "text": "Shots are timed to the sun, and furniture, lamps and styling are set before the camera comes out."
         },
         {
-          "title": "Run it live",
-          "text": "On show day the goal is a calm, clear show."
+          "title": "Shoot",
+          "text": "Tripod, tilt-shift lenses and bracketed frames, so verticals stay straight and windows keep their view."
         },
         {
-          "title": "Look back",
-          "text": "After each show, notes on what worked and what to change next time."
+          "title": "Edit and deliver",
+          "text": "Color-matched, retouched files in print and web sizes, with usage terms written down."
         }
       ]
     },
     {
       "type": "text",
-      "id": "engine",
-      "eyebrow": "The tools",
-      "title": "Why we build our own tools",
+      "id": "approach",
+      "eyebrow": "Approach",
+      "title": "Why the light comes first",
       "paragraphs": [
-        "A lot of video work repeats every week: the same lower thirds, the same highlight cuts, the same checks before something ships. Small tools do those parts the same way every time, so the time goes into the parts that need a person.",
-        "They cover highlight reels and vertical clips, talking-head edits with captions, animated logos, explainers and static websites. The motion on this page runs on the same spring maths the engine uses for video graphics."
+        "A room looks different at nine in the morning and at four in the afternoon. Most of the work happens before the shutter: choosing the hour, opening or closing blinds, and deciding which lamps stay on.",
+        "The glass shapes on this page bend light the way a good window does. They are drawn live in your browser, so this demo needs no photos at all."
       ]
     },
     {
       "type": "cta",
       "id": "contact",
       "eyebrow": "Contact",
-      "title": "Say hello",
-      "lede": "Questions about any of this work? Email is the easiest way to reach us.",
+      "title": "Plan a shoot",
+      "lede": "Tell us about the space, the timing and where the photos will be used. Email is the easiest way to reach the studio.",
       "button": "Email the studio",
       "href": "mailto:hello@example.com"
     }

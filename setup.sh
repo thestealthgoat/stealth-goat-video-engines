@@ -8,10 +8,12 @@
 #   ./setup.sh --profile NAME  profile to check at the end (default: $VIDEO_PROFILE, then local.json)
 #
 # What it does:
-#   1. Homebrew formulas: ffmpeg (stable, native arm64, /opt/homebrew/bin), imagemagick, tesseract, node, cairo
-#   2. python3 -m pip install --user -r requirements.txt, then an import check of every module
+#   1. Homebrew formulas: ffmpeg (stable, native arm64, /opt/homebrew/bin), imagemagick, tesseract, node, cairo;
+#      then which ffmpeg is on PATH (and its encoders and filters), ffprobe, tesseract, magick, node
+#   2. python3 -m pip install --user -r requirements.txt, then an import check of every module; warnings for
+#      duplicate OpenCV wheels, the cv2 + PyAV dylib clash, missing CA certificates, pip --user scripts not on PATH
 #   3. logo/setup.sh (npm packages, Playwright Chromium, the opencv-contrib venv logo/srenv for sr.py)
-#   4. warnings: ffmpeg on PATH, duplicate OpenCV wheels, cv2 + PyAV dylib clash, missing CA certificates
+#   4. resources: the fonts in resources/fonts and the upscaling models in resources/models
 #   5. prints the shell lines to add to ~/.zprofile
 #   6. python3 engine/vprofile.py show <profile> --check
 # Exit code: 0 when every required piece is there, 1 when something required is missing.
@@ -29,7 +31,7 @@ while [ $# -gt 0 ]; do
     --no-logo) DO_LOGO=0 ;;
     --profile) shift; PROFILE="${1:-}" ;;
     --profile=*) PROFILE="${1#--profile=}" ;;
-    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (see --help)"; exit 2 ;;
   esac
   shift
@@ -95,7 +97,7 @@ command -v node      >/dev/null 2>&1 && ok "node $(node --version 2>/dev/null)" 
 step "2. Python packages"
 PY=$(command -v python3 || true)
 if [ -z "$PY" ]; then
-  miss "python3 not found. Install Python 3.12+ from python.org (or brew install python), then run again."
+  miss "python3 not found. Install Python 3.10+ from python.org (the installer is easiest; Homebrew's Python refuses pip --user), then run again."
   PYV=""
 else
   PYV=$("$PY" -c 'import sys; print("%d.%d" % sys.version_info[:2])')

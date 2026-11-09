@@ -48,7 +48,7 @@ def divider_x(t, dur):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="T6 before / after showcase")
+    ap = argparse.ArgumentParser(description="before / after showcase")
     ap.add_argument("--before", required=True); ap.add_argument("--after", required=True); ap.add_argument("--out", required=True)
     ap.add_argument("--name", default="showcase"); ap.add_argument("--a0", type=float, default=0.0); ap.add_argument("--b0", type=float, default=0.0)
     ap.add_argument("--dur", type=float, default=6.5); ap.add_argument("--labels", default="BEFORE|AFTER")

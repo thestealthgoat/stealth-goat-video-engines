@@ -14,11 +14,11 @@ python3 engine/vprofile.py sample demo "$T/demo_card.png"
 ```
 
 `show demo --check` ends `CHECK: OK` on a fresh machine too: the demo profile lists its working folders under
-`~/Movies/video-work` as optional. Show `demo_card.png`: this is what a profile is (colours with
+`~/Movies/video-work` as optional. Show `demo_card.png`: this is what a profile is (colors with
 contrast, fonts, logo, a sample lower third).
 
 `demo` ships with the engine (`profiles/demo/`: display name "Demo Sports", primary `#0B3D2E`, accent `#F2B705`,
-Anton and Barlow Condensed Medium with their OFL licences, and `assets/demo_logo.png` as `brand.logo_png`). If it is
+Anton and Barlow Condensed Medium with their OFL licenses, and `assets/demo_logo.png` as `brand.logo_png`). If it is
 not in the list, the clone is incomplete or out of date: `git pull` in the engine folder. Only if that is not
 possible, make a stand-in from the template:
 
@@ -51,7 +51,7 @@ python3 logo/motion.py "$T/acme.svg" "$T" ACME intro --profile demo
 ```
 
 Outputs: `$T/ACME_intro_Alpha.mov` (ProRes 4444 with alpha: drop it over footage in any editor) and
-`$T/ACME_intro.mp4` (a preview on the profile's primary colour). The default is 60 fps (`--fps` to change).
+`$T/ACME_intro.mp4` (a preview on the profile's primary color). The default is 60 fps (`--fps` to change).
 Point out: the same command with `outro --text1 "THANKS FOR WATCHING" --text2 "SEE YOU NEXT WEEK"` gives an end card,
 `bug` gives a corner bug (in, loop, out), `stinger` a 1.2 s wipe, `writeon` a pen tracing the logo.
 
@@ -65,7 +65,7 @@ python3 engine/statcard.py docs/stats_card_example.json "$T" --profile demo --na
 The first line writes two stills, `$T/demo_card_stats_t1.00.png` and `$T/demo_card_stats_t3.00.png`; the second writes `$T/demo_card_stats_Alpha.mov` (alpha, full frame),
 `$T/demo_card_stats.mp4` (preview) and `$T/demo_card_stats.png` (the settled card, transparent).
 Point out: the stats file is plain JSON (`num`, `name`, `big`, 2-4 `stats` pairs, optional `photo` cutout); copy it
-and fill in your own. The panel slides in on springs and the numbers count up. Colours, fonts and the logo (from
+and fill in your own. The panel slides in on springs and the numbers count up. Colors, fonts and the logo (from
 `brand.logo_png`) come from the profile, so `--profile <theirs>` re-brands it with no other change.
 
 ## 3. QA run (video-gates skill)
@@ -120,7 +120,7 @@ axis of a scope, draw a still shape when their frequencies make a small whole-nu
 from the real waveforms, and the soundtrack is those same tones. Files: `make.py` (builds the data, the tones and
 the storyboard), `storyboard.json` (the beats: what is said, what is on screen), `VO_SCRIPT.md` (the voice-over
 script). Read the docstring at the top of `make.py` first. Its example adds `--music-db -10`; that flag only sets
-the bed against a voice-over, so without one it has no effect (the bed is levelled to the profile loudness) and the
+the bed against a voice-over, so without one it has no effect (the bed is leveled to the profile loudness) and the
 commands below leave it out. Follow the docstring for anything else that differs.
 
 ```bash
@@ -144,7 +144,7 @@ The render takes about three minutes (1186 frames). Expect the QA to end `RESULT
 at the profile's -14 LUFS and the freshness gate well inside 2.5 s. If `explain.py` stops before rendering with
 `--music ...: no such file (for a topic pack, run its make.py first)`, run `make.py` again.
 
-Outputs: `$T/liss/lissajous.mp4` (1080p at the profile's frame rate, mix levelled to the profile loudness) and
+Outputs: `$T/liss/lissajous.mp4` (1080p at the profile's frame rate, mix leveled to the profile loudness) and
 `$T/liss/lissajous.xml` (a Premiere timeline, one clip a beat with a marker on each). `--kind explainer` adds the
 freshness gate: a new visual at least every 2.5 s.
 Point out: captions are paced by line length until a voice-over is recorded. With a recording (the user's own voice,

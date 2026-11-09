@@ -155,12 +155,12 @@ def head_anchor(alpha, W, H):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="O3 / T2 text behind the person")
+    ap = argparse.ArgumentParser(description="text behind the person")
     ap.add_argument("video"); ap.add_argument("--out", required=True); ap.add_argument("--name")
     ap.add_argument("--t0", type=float, default=0.0); ap.add_argument("--t1", type=float)
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--text"); g.add_argument("--events"); g.add_argument("--auto", help="words.json for T2")
-    ap.add_argument("--every", type=float, default=3.5, help="T2: seconds between words at least")
+    g.add_argument("--text"); g.add_argument("--events"); g.add_argument("--auto", help="words.json: one keyword per phrase, picked automatically")
+    ap.add_argument("--every", type=float, default=3.5, help="--auto: seconds between words at least")
     ap.add_argument("--matte", help="an existing <name>_matte.mp4 of this window (else matte.py runs first)")
     ap.add_argument("--fill", default="solid"); ap.add_argument("--color", default="text")
     ap.add_argument("--size", type=float, default=0.30, help="cap height as a share of the frame height")

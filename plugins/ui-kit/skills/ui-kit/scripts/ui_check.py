@@ -54,7 +54,7 @@ JS_FORMS = r"""() => {
     overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,   // innerWidth grows with the page on a phone
   }; }"""
 
-# every visible text line on the page, in page coordinates: colour (alpha x opacity), size, rects
+# every visible text line on the page, in page coordinates: color (alpha x opacity), size, rects
 JS_TEXT = r"""() => {
   const out = [], rgba = (c) => { const m = (c || '').match(/[\d.]+/g); return m && m.length >= 3 ? [+m[0], +m[1], +m[2], m.length > 3 ? +m[3] : 1] : null; };
   const opOf = (e) => { let o = 1; for (; e && e.nodeType === 1; e = e.parentElement) o *= +getComputedStyle(e).opacity; return o; };

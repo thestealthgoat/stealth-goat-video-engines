@@ -4,6 +4,8 @@ fullcrop.py <Games dir> <requests.json> <out dir> [--seconds 150]   -> <out>/<na
 import sys, os, io, json, glob, time
 from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True; Image.MAX_IMAGE_PIXELS = None
+if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):   # usage before anything runs
+    print(__doc__); sys.exit(0)
 G, req, out = sys.argv[1], json.load(open(sys.argv[2])), sys.argv[3]
 budget = float(sys.argv[sys.argv.index('--seconds') + 1]) if '--seconds' in sys.argv else 150
 os.makedirs(out, exist_ok=True); T0 = time.time()

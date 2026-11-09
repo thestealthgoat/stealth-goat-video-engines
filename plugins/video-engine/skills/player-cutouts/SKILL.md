@@ -28,7 +28,7 @@ There is a folder for every player on the roster, so an empty folder means "no u
 3. Pick the profile: `--profile <name>` on every `cutouts.py` command (it may go anywhere on the line), else
    `$VIDEO_PROFILE`, else `default_profile` in the engine folder's `local.json`. `fullcrop.py` and `copy_photos.py`
    take no profile. From the profile `cutouts.py` reads:
-   - `team.uniform`: the team's jersey colour bands. **Only `candidates` needs it, and there is no default.** The
+   - `team.uniform`: the team's jersey color bands. **Only `candidates` needs it, and there is no default.** The
      `demo` profile has none, so `candidates --profile demo` stops with a message. `cut` and `library` work with
      `demo`.
    - `brand.colors.primary`: the review-sheet background.
@@ -37,9 +37,9 @@ There is a folder for every player on the roster, so an empty folder means "no u
 4. For a real team, have the user make a profile from `profiles/_template`:
    `python3 engine/vprofile.py new myteam --display "ACME Athletics" --primary "#112233" --accent "#E04050"`, then
    set `team.home_abbr` and add `team.uniform` (measure it as in
-   [references/uniform-colours.md](references/uniform-colours.md)). Check it with
+   [references/uniform-colors.md](references/uniform-colors.md)). Check it with
    `python3 engine/vprofile.py show myteam --check`. `team.uniform` is described in
-   [references/uniform-colours.md](references/uniform-colours.md) and the engine's `cutouts/README.md`; `docs/LAYOUT.md`
+   [references/uniform-colors.md](references/uniform-colors.md) and the engine's `cutouts/README.md`; `docs/LAYOUT.md`
    covers the other profile keys.
 5. Check the dependencies once: `python3 -c "import rembg, onnxruntime, cv2"`. If that fails, run `./setup.sh --check`
    in the engine folder (or the getting-started skill; `setup.sh` targets macOS with Homebrew). `rapidocr_onnxruntime`
@@ -72,7 +72,7 @@ cd "$VIDEO_ENGINE" && python3 cutouts/cutouts.py --profile myteam candidates <cu
 - nothing is cut off at the top or the sides;
 - he is at least 35% of the frame height;
 - he wears the team uniform: enough of `team.uniform.team`, and no more than `max` of each `team.uniform.reject`
-  colour (the opponents);
+  color (the opponents);
 - within each burst the frames that pass are ranked by the cull's focus score `qa.subj` times his height share (a
   missing score counts as 0). There is no focus threshold: a soft burst still sends its best frame forward, so check
   sharpness on the sheets.
@@ -134,7 +134,7 @@ cd "$VIDEO_ENGINE" && python3 cutouts/cutouts.py --profile myteam cut <work>/cro
   `engine/models.py` picks (`$U2NET_HOME`, else `rembg_models` in `local.json`, else `resources/models/rembg`, else
   rembg's default folder). Tell the user before that download. Do not run `cut` alongside a video render: one heavy job at a time.
 - It writes `out/png/<name>.png`, `out/grades.json` and `out/review_0.jpg`, `review_1.jpg`, ... (40 per sheet, on the
-  profile's primary colour, labelled `<index> <grade> #<number> <last 5 characters>`). It is resumable: photos
+  profile's primary color, labeled `<index> <grade> #<number> <last 5 characters>`). It is resumable: photos
   already in `grades.json` are not cut again.
 - The grade (details in [references/library.md](references/library.md)):
   - **A** full body; **B** cut at the bottom of the frame (three-quarter);

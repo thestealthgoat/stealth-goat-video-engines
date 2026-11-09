@@ -48,7 +48,7 @@ Exit code: 0 PASS, 1 FAIL, 2 unreadable file (or a bad argument, or a `--profile
 |---|---|---|
 | integrity and spec | size, fps, frame count, pixel format, audio present; clean decode | the profile's `delivery` block |
 | motion | `engine/motion_check.py`: dead stretches and stutters (1-2 frame repeats mid-motion). Regular repeat cadences (29.97 in 59.94, 3:2 pulldown) are a note, or a WARN when lower-rate material was conformed by repeating frames | no dead stretch, no stutter |
-| flashes and foreign frames | 1-2 frame luma spikes/drops; a single frame unlike both neighbours | none unplanned |
+| flashes and foreign frames | 1-2 frame luma spikes/drops; a single frame unlike both neighbors | none unplanned |
 | cuts vs plan | ffmpeg scdet hard cuts against `--cuts` / `--shotlist` | no unplanned cut |
 | pops | an element appearing or vanishing in one frame (motion, explainer, loop) | WARN only |
 | hook: motion by 0.5 s | first visible change | <= 0.5 s |
@@ -58,7 +58,7 @@ Exit code: 0 PASS, 1 FAIL, 2 unreadable file (or a bad argument, or a `--profile
 | hard audio cuts | `engine/audio_check.py` at every cut: an audio change without a fade | every change fades |
 | loudness | integrated LUFS | `delivery.loudness_lufs` +-1 LU |
 | true peak | dBTP | <= `delivery.true_peak_db` |
-| clicks, dropouts, silence | sample discontinuities, digital silence inside the programme, silence >= 0.5 s | none (outside `--silences`) |
+| clicks, dropouts, silence | sample discontinuities, digital silence inside the program, silence >= 0.5 s | none (outside `--silences`) |
 | freshness | explainer only: a new visual (a cut, a scene change, or a part of the frame that changes and stays changed) at least every `--max-scene` s. A dot passing through or a steady drift does not count | <= `--max-scene` |
 
 Results: **PASS**, **WARN**, **FAIL**, **SKIP** (not run: no audio, `--kind loop`, no cut plan), **INFO** (declared

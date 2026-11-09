@@ -3,8 +3,12 @@
 ## Where things go
 
 - `engine/` generic tools. No organization's paths, colors, fonts or names in code: ask the profile.
-- `packs/<org>/` one organization's own workflows (its sport logic, its recipes). They use the profile too.
+- `packs/<org>/` optional: your own workflows (one organization's recipes and logic). Git-ignored, so they stay
+  out of the engine's repository. They use the profile too.
 - `logo/`, `cutouts/` generic tool groups with their own setup.
+- `web/` the website kit (`build.py`, the compliance gate, previews, templates).
+- `examples/` ready-made inputs for the demo profile.
+- `plugins/` the Claude plugins (`video-engine`, `ui-kit`).
 - `profiles/<name>/profile.json` one organization; `profiles/_template/profile.json` is copied by `vprofile.py new`.
 - `resources/fonts/`, `resources/models/` shared files that profiles point at with `{repo}/resources/...`.
 - `tests/` self-tests (synthetic input, output only under `tests/out/`).
@@ -15,7 +19,7 @@
 ```python
 import argparse, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "engine"))
-import vprofile as prof                     # (from packs/<org>/ go up one more level)
+import vprofile as prof                     # (from an optional packs/<org>/ folder, go up one more level)
 
 ap = argparse.ArgumentParser()
 prof.add_arg(ap)                            # adds --profile

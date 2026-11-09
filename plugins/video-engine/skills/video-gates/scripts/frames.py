@@ -12,9 +12,9 @@ A graphic that breaks for 2-3 frames can fall between 4 fps samples: for every e
 transition, run the range again at the full rate, e.g. --from 12.0 --to 13.5 --fps 29.97 --window 1.5 (no --qa).
 
 Writes into <dir>:
-  contact_<start>s.jpg   one sheet per --window seconds, --fps frames a second (default 4), each tile labelled with
+  contact_<start>s.jpg   one sheet per --window seconds, --fps frames a second (default 4), each tile labeled with
                          its time and (approximate) frame number
-  cut_f<N>.jpg           with --qa: every detected and every planned cut, 4 frames before and 4 after, each labelled
+  cut_f<N>.jpg           with --qa: every detected and every planned cut, 4 frames before and 4 after, each labeled
                          with its exact frame number; the first frame of the new shot is outlined
   flag_f<A>-f<B>.jpg     with --qa: every flag span up to 2 s long (whole-file flags such as loudness are skipped),
                          frame by frame with 2 frames of context each side, at most 24 frames a strip

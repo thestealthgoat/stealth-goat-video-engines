@@ -10,7 +10,7 @@ Steps: key out a solid background (if any) -> AI-upscale small images x4 (EDSR) 
 result against the original.
 
 Outputs: <name>.svg, <name>_Transparent_<W>px.png, <name>_vector_check.png (original | vector | difference), and
-prints a fidelity score (silhouette IoU and mean colour error). Score < 0.97 IoU means look closely before using it.
+prints a fidelity score (silhouette IoU and mean color error). Score < 0.97 IoU means look closely before using it.
 """
 import argparse, io, os, re, subprocess, sys, tempfile
 import numpy as np
@@ -144,7 +144,7 @@ def main():
     ap.add_argument('--target', type=int, default=2400, help='working resolution (long side)')
     ap.add_argument('--flatten-shading', action='store_true',
                     help='for logos that are already "3D"/embossed/photographed: drop light neutral shadows as background '
-                         'and group colours by hue/chroma instead of brightness')
+                         'and group colors by hue/chroma instead of brightness')
     ap.add_argument('--bg-light', type=float, default=74, help='with --flatten-shading: L* above this AND near-neutral = background')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -234,7 +234,7 @@ def main():
     iou = (a1 & a2).sum() / max((a1 | a2).sum(), 1)
     both = a1 & a2
     cerr = np.abs(ref[..., :3].astype(int) - vec[..., :3].astype(int))[both].mean() if both.any() else 0
-    print(f'FIDELITY silhouette IoU {iou:.3f}  mean colour error {cerr:.1f}/255  colours {len(parts)}')
+    print(f'FIDELITY silhouette IoU {iou:.3f}  mean color error {cerr:.1f}/255  colors {len(parts)}')
     # side-by-side check image on grey
     def on_grey(x):
         bgim = Image.new('RGBA', (W, H), (128, 128, 128, 255)); bgim.alpha_composite(Image.fromarray(x)); return bgim.convert('RGB')

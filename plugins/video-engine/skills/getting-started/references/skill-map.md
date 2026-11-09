@@ -24,7 +24,7 @@ right skill picks it up. The engine tools named here are in the engine folder (`
 
 | Skill | What it makes | Say things like |
 |---|---|---|
-| ui-kit | brand colour tokens with measured contrast, type scale, spring UI motion, accessible components and focus states | "apply the UI kit to this app", "make our app's colours accessible" |
+| ui-kit | brand color tokens with measured contrast, type scale, spring UI motion, accessible components and focus states | "apply the UI kit to this app", "make our app's colors accessible" |
 | website | one-page sites from a short `site.json`, with draft legal pages and a compliance gate | "build a website for my studio" |
 
 Install it with `/plugin install ui-kit@stealth-goat` (same marketplace). The website skill uses the same engine

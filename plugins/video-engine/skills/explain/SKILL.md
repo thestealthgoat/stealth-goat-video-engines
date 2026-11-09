@@ -1,6 +1,6 @@
 ---
 name: explain
-description: Makes retention-style explainer videos from a topic with the video engine. Finds the picture that shows the real mechanism, computes every number on screen from real maths or data, writes the beats as a storyboard.json, renders an approval board (one still per beat) for the user to sign off, then renders a 16:9 MP4 plus Premiere XML with spring motion, captions, a voice-over or on-screen text, and a music bed, and QA-checks it. Use when the user says "make an explainer on...", "explain how X works in a video", "animated explainer", "why does a mic feed back, as a video", "storyboard this explanation", "turn this concept into a short video", or "render the explainer board".
+description: Makes retention-style explainer videos from a topic with the video engine. Finds the picture that shows the real mechanism, computes every number on screen from real math or data, writes the beats as a storyboard.json, renders an approval board (one still per beat) for the user to sign off, then renders a 16:9 MP4 plus Premiere XML with spring motion, captions, a voice-over or on-screen text, and a music bed, and QA-checks it. Use when the user says "make an explainer on...", "explain how X works in a video", "animated explainer", "why does a mic feed back, as a video", "storyboard this explanation", "turn this concept into a short video", or "render the explainer board".
 ---
 
 # Explain
@@ -13,8 +13,8 @@ QA. The hard part is the creative step, not the rendering.
 1. Check `$VIDEO_ENGINE` (`echo "$VIDEO_ENGINE"`). If it is unset or the folder has no `engine/explain.py`, ask the
    user where their clone of https://github.com/thestealthgoat/stealth-goat-video-engines is, or run the
    `getting-started` skill to set it up. Without a clone, setup is
-   `git clone https://github.com/thestealthgoat/stealth-goat-video-engines`, then `./setup.sh` inside it (it targets
-   macOS with Homebrew), then `export VIDEO_ENGINE="<path to the clone>"`. Run every command from there:
+   `git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine`, then `./setup.sh`
+   inside it (it targets macOS with Homebrew), then `export VIDEO_ENGINE="$HOME/video-engine"`. Run every command from there:
    `cd "$VIDEO_ENGINE" && python3 engine/<tool>.py ...`.
 2. Pick the profile. Every tool takes `--profile <name>` (else `$VIDEO_PROFILE`, else `local.json`). Use the user's
    own brand profile if they have one (made from `profiles/_template` with `python3 engine/vprofile.py new <name>`;
@@ -23,14 +23,14 @@ QA. The hard part is the creative step, not the rendering.
    `python3 engine/vprofile.py new demo --display "Demo" --primary "#0B3D2E" --accent "#F2B705"`.
 
 Tools used here: `engine/storyboard.py` (pace / retime / check / board), `engine/explain.py` (render, drawing with
-`engine/explain.html`), `engine/musicbed.py` (a synthesised bed), `engine/sourcecard.py` (a real web page with the
+`engine/explain.html`), `engine/musicbed.py` (a synthesized bed), `engine/sourcecard.py` (a real web page with the
 exact phrase boxed), `engine/qa.py --kind explainer` (the QA gate). Worked example: `examples/explain/lissajous/`
 (`make.py`, `storyboard.json`, `VO_SCRIPT.md`).
 
 ## The core rule: show the mechanism, not a metaphor
 
-No stock images, no clip-art symbols. Make the real thing visible and compute the picture from real maths or real
-data. The numbers on screen are true (ms, Hz, metres, dB), so the viewer trusts it and the visual explains itself.
+No stock images, no clip-art symbols. Make the real thing visible and compute the picture from real math or real
+data. The numbers on screen are true (ms, Hz, meters, dB), so the viewer trusts it and the visual explains itself.
 Every number lives in the topic's `make.py`; never type a computed value into the storyboard by hand.
 
 ## Step 1: find the picture
@@ -59,12 +59,18 @@ Give the user the 1-2 best picture ideas with a one-line pitch each, and let the
 
 ## Step 3: write the beat sheet as storyboard.json
 
-Make a topic folder inside the engine folder at the same depth as the example, e.g. `packs/explain/<slug>/`, so the
-example's `make.py` (which imports `engine/storyboard.py` from three folders up) works when copied:
+The topic folder is the user's own work, not part of the engine. The commands below put it at
+`packs/explain/<slug>/` in the engine clone: the public engine ships no `packs/` folder and its `.gitignore` ignores
+`/packs/`, so nothing there clashes with an engine update or shows up in git. That is the same depth as the example, so the example's `make.py` (which finds `engine/storyboard.py` three folders up) works
+when copied:
 
 ```bash
 cd "$VIDEO_ENGINE" && mkdir -p packs/explain && cp -R examples/explain/lissajous packs/explain/<slug>
 ```
+
+A folder outside the engine works too: copy the example there and change the `REPO = ...` line in its `make.py` to
+the engine folder (for example `REPO = os.environ["VIDEO_ENGINE"]`), then use that folder's path wherever these
+steps say `packs/explain/<slug>/`.
 
 Then rewrite `make.py` for the topic: compute the numbers, build the beats, call `storyboard.pace(...)` (or `retime`
 when a voice-over exists), set `drop_at` and `duration`, and save `storyboard.json`. Keep generated audio and data
@@ -92,10 +98,10 @@ top of `engine/storyboard.py` (`head -40 engine/storyboard.py`; `-h` lists only 
 
 ## Step 4: one visual grammar per video
 
-- Dark ground (the profile's `primary_deep`, else a darkened `primary`) with a soft radial glow; one meaning per colour.
+- Dark ground (the profile's `primary_deep`, else a darkened `primary`) with a soft radial glow; one meaning per color.
 - `signal` (gold `#F2C14E` unless the profile sets `explain.signal`) = what moves through the system.
 - `hot` (the profile's `explain.hot`, else its accent) = over the line, the answer. Never use `hot` for something that
-  has a real colour of its own (green light gets its own hex) and never for a good outcome.
+  has a real color of its own (green light gets its own hex) and never for a good outcome.
 - Small eyebrow + big title; real units on every readout; thin lines with glow; nothing decorative. Captions stay in
   one zone at the bottom.
 - For a `scope` trace use `"color": "text"` so it reads on any ground.
@@ -163,7 +169,7 @@ re-time itself, then run `make.py` again so the demo audio follows the words. Ch
 
 ## Step 7: render
 
-One heavy render at a time. Music: either a synthesised bed (no samples, no licences) or the topic's own demo sound.
+One heavy render at a time. Music: either a synthesized bed (no samples, no licenses) or the topic's own demo sound.
 
 ```bash
 # a music bed, with a bar starting exactly on the payoff beat (read drop_at and duration from storyboard.json);
@@ -181,11 +187,11 @@ python3 engine/explain.py examples/explain/lissajous/storyboard.json --out out/l
     --music examples/explain/lissajous/_build/tones.wav
 ```
 
-Outputs in `--out`: `<name>.mp4` (H.264, 1080p at the profile's frame rate, mix levelled to the profile's
+Outputs in `--out`: `<name>.mp4` (H.264, 1080p at the profile's frame rate, mix leveled to the profile's
 `delivery.loudness_lufs`) and `<name>.xml` (Premiere: one clip per beat, a marker on each). `<name>` defaults to the
 storyboard's file name (`storyboard`); `--name` changes it. Other flags: `--aspect 9:16` (portrait; elements may
 carry `"v": {...}` overrides for it), `--fps`, `--no-music`. With a voice-over, `--music-db` sets the bed under the
-voice (default -18); without one the bed is the whole programme and `--music-db` has no effect.
+voice (default -18); without one the bed is the whole program and `--music-db` has no effect.
 
 ## Step 8: QA before delivery
 

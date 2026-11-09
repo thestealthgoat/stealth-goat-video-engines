@@ -54,7 +54,7 @@ def kick(n):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="synthesised music bed")
+    ap = argparse.ArgumentParser(description="synthesized music bed")
     ap.add_argument("out"); ap.add_argument("--dur", type=float, required=True)
     ap.add_argument("--bpm", type=float, default=92); ap.add_argument("--drop", type=float)
     ap.add_argument("--key", default="D"); ap.add_argument("--prog", default="1,5,6,4")

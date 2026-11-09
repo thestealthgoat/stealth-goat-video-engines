@@ -16,7 +16,7 @@
   const S = root.Spring;
   if (!S) throw new Error('ui-motion.js: load spring.js first');
   const reduced = () => root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const DIST = 8;                     // px travelled while entering: matches --move-ui in tokens.css
+  const DIST = 8;                     // px traveled while entering: matches --move-ui in tokens.css
   const runs = new WeakMap();         // el -> {p (0 hidden .. 1 shown), raf}
 
   function draw(el, p, dist) {

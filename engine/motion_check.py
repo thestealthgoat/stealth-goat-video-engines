@@ -400,7 +400,7 @@ def main():
                     help="a stretch is still while under this share of pixels differs from its first frame "
                          "(default 0.003 = 0.3%%: a spring's sub-pixel settle stays under it; a small element "
                          "drifting across the frame goes over)")
-    ap.add_argument("--level", type=int, default=3, help="grey-level change that counts as a changed pixel (default 3)")
+    ap.add_argument("--level", type=int, default=3, help="gray-level change that counts as a changed pixel (default 3)")
     ap.add_argument("--width", type=int, default=480, help="analysis width in px (default 480)")
     ap.add_argument("--allow-stutter", action="store_true",
                     help="skip the stutter check (source footage with 24p->30p pulldown repeats frames on purpose)")
@@ -435,7 +435,7 @@ def main():
     fails = [x for x in issues if x["kind"] not in ("hold", "cadence")]
 
     print(f"motion_check: {a.video}")
-    print(f"  {dur:.2f} s @ {fps:.3f} fps, {n} frames{'  (alpha composited on grey)' if info['alpha'] else ''}")
+    print(f"  {dur:.2f} s @ {fps:.3f} fps, {n} frames{'  (alpha composited on gray)' if info['alpha'] else ''}")
     for x in issues:
         if x["kind"] == "hold" and x["t1"] - x["t0"] < 0.5:
             continue  # tiny allowed holds (strict mode) are noise

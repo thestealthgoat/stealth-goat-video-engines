@@ -63,7 +63,7 @@ result, deliver. Tool details and file formats are in [references/tools.md](refe
 | Talking head, talk, sermon, podcast segment, interview: "cut the pauses", "tighten this", "edit this in my style" | `engine/talkedit.py` (§3.1) |
 | "Caption this", "subtitles", "burned-in captions", "an .srt" | `engine/captions.py` (§3.2). Already editing with talkedit? It captions for you |
 | Clips + a song: "cut this to the beat", "beat-sync" | Finished render with effects: `engine/fxpack.py` (§3.3). Premiere edit list only: `engine/beatsnap.py` then `engine/fcp7xml.py` (§3.4) |
-| "Hype edit", "cinematic cut", flash cuts, whip pans, speed ramps, zoom punches, RGB split, black and white with a colour pop, kinetic text | `engine/fxpack.py` (§3.3) |
+| "Hype edit", "cinematic cut", flash cuts, whip pans, speed ramps, zoom punches, RGB split, black and white with a color pop, kinetic text | `engine/fxpack.py` (§3.3) |
 | "Where are the beats / the drop in this song?", "best 15 s of this track" | `engine/beatmap.py` (§3.4) |
 | Memory verse, lyric, read-along with a character hopping word to word | `engine/hopwords.py` (§3.5) |
 | "Give me an After Effects version", "editable in AE" | `engine/statcard.py ... --ae` (§3.6) for stats lower thirds; other templates have no AE export yet |
@@ -146,9 +146,9 @@ python3 engine/fxpack.py out/hype/plan.json --out out/hype --name hype --profile
 ```
 
 Look at the stills first and pick in-points on live action. Every effect needs a music event within one frame and a
-measured picture reason (the H3 gate), else the render stops with exit 3 and lists it in `hype_fx.json`: fix the
+measured picture reason (the effect gate), else the render stops with exit 3 and lists it in `hype_fx.json`: fix the
 plan, don't force it. Outputs `hype_fx.mp4`, `hype_fx.xml` (Premiere, a marker per effect), `hype_fx.json`,
-`hype_fx_music.wav` (the levelled music the XML uses), and it prints the qa arguments
+`hype_fx_music.wav` (the leveled music the XML uses), and it prints the qa arguments
 (`qa: --kind edit --cuts 1.498,3.500`): pass exactly those to qa.py (§4). qa's hook gate wants a cut or a big move
 by 2.0 s (the frame nearest 2 s still counts), so keep the first shot to 2 s or less (3 beats at 120 BPM is 1.5 s;
 4 beats is 2.0 s, the longest that passes) or open on a shot with a big move. Add `"bpm"` to the plan when the tempo is known: beatmap can halve a tempo it is not

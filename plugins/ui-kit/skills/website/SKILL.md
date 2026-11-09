@@ -19,21 +19,21 @@ another host, sets no tracking cookies, and writes draft legal pages from the si
    the same tools by hand: Python 3 with Pillow and Playwright, ffmpeg, Node):
 
    ```bash
-   git clone https://github.com/thestealthgoat/stealth-goat-video-engines
-   cd stealth-goat-video-engines && ./setup.sh
-   export VIDEO_ENGINE="$PWD"        # add this line to ~/.zprofile so it survives a new shell
+   git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine
+   cd ~/video-engine && ./setup.sh
+   export VIDEO_ENGINE="$HOME/video-engine"   # add this line to ~/.zprofile so it survives a new shell
    ```
 
    (If the video-engine plugin from the same marketplace is installed, its getting-started skill walks through the
    same setup. This website skill does not need that plugin.)
 3. Pick the profile: `--profile <name>` on the build, else the site.json `"profile"` key, else `$VIDEO_PROFILE`,
    else `default_profile` in the engine folder's `local.json`. The engine ships a `demo` profile (Anton + Barlow
-   Condensed with their OFL licences): use it to try things. For the user's own brand, make one from
+   Condensed with their OFL licenses): use it to try things. For the user's own brand, make one from
    `profiles/_template`, e.g. `python3 engine/vprofile.py new acme --display "ACME" --primary "#0B3D2E" --accent
    "#F2B705"` (see `docs/LAYOUT.md`), then set its `brand.colors` (`primary`, `accent`, `text`) and `brand.fonts`
    (`head`, `body`, `body_semibold`) in `profiles/acme/profile.json`. A new profile points at the bundled fonts in
-   `{repo}/resources/fonts/`, whose licence files sit beside them, so the gate's font check passes as made.
-   `python3 engine/vprofile.py show acme --check` prints the resolved fonts and colours; it also lists the video
+   `{repo}/resources/fonts/`, whose license files sit beside them, so the gate's font check passes as made.
+   `python3 engine/vprofile.py show acme --check` prints the resolved fonts and colors; it also lists the video
    `paths` folders as missing until they exist, which does not matter for a website.
 4. Check the dependencies once (`./setup.sh --check` in the engine folder lists what is missing):
    - Pillow for every build; `ffmpeg` / `ffprobe` for `preview.py` and for a W4 video sequence;
@@ -120,8 +120,8 @@ python3 web/preview.py out/acme --out out/acme_preview --name acme    # desktop 
 
 - `build.py` prints the template, the section count, the logged assets and the size. The folder holds
   `index.html`, `privacy.html`, `terms.html`, `data-request.html` (`cookies.html` and a consent banner only when
-  `third_party` is set), `assets/`, `fonts/` with their licence files, `img/`, and `assets.json` (every font, image
-  and library with its source and licence).
+  `third_party` is set), `assets/`, `fonts/` with their license files, `img/`, and `assets.json` (every font, image
+  and library with its source and license).
 - `compliance.py` writes `out/acme_compliance.md` beside the folder (never inside it, so it never ships) and exits 1
   on FAIL. What it checks and how to fix each FAIL: [references/compliance-gate.md](references/compliance-gate.md).
   Fix the site.json or the profile and rebuild until it says PASS. Never hand-edit the built HTML to get a PASS.
@@ -156,8 +156,9 @@ python3 web/compliance.py out/demo-world --site examples/sites/demo-world/site.j
 python3 web/preview.py out/demo-world --out out/demo-world_preview --name demo-world
 ```
 
-**W5 glass showcase** (`examples/sites/demo-studio/site.json`): a placeholder studio page with three chapters, a
-second ghost button (`cta2`), then features, process, text and a mailto CTA (no form, so no endpoint to set).
+**W5 glass showcase** (`examples/sites/demo-studio/site.json`): a fictional architecture and interiors photography
+studio (Northlight Studio) with three portfolio chapters (residential, hospitality, workplaces), a second ghost
+button (`cta2`), then features, process, text and a mailto CTA (no form, so no endpoint to set).
 
 ```bash
 cd "$VIDEO_ENGINE"
@@ -172,8 +173,8 @@ items are the three DRAFT legal pages and the physical-address question; they ar
 sheets show every scene and chapter; the scroll videos behave as described in section 4.
 
 To start a new site, copy the example closest to the job into a new folder, change the template if needed, and
-rewrite every fact. If the gate reports a font licence FAIL on a profile, put the `OFL-<Family>.txt` licence beside
-each font file in that profile (the bundled fonts' licences are in `resources/fonts/`) and rebuild.
+rewrite every fact. If the gate reports a font license FAIL on a profile, put the `OFL-<Family>.txt` license beside
+each font file in that profile (the bundled fonts' licenses are in `resources/fonts/`) and rebuild.
 
 ## 6. Built in: what the kit does so you don't have to
 
@@ -187,11 +188,11 @@ each font file in that profile (the bundled fonts' licences are in `resources/fo
 - **Accessibility**: a skip link, Tab reaches every control with a visible focus style, alt text on every image,
   contrast measured in the browser against the real pixels (4.5:1, 3:1 large), no sideways scroll on a phone,
   `prefers-reduced-motion` respected.
-- **Colours** derived from the profile until body text, muted text and the accent pass 4.5:1 on a dark ground.
-  Change the profile's colours, not the CSS, when the user wants a different look.
+- **Colors** derived from the profile until body text, muted text and the accent pass 4.5:1 on a dark ground.
+  Change the profile's colors, not the CSS, when the user wants a different look.
 - **Motion**: UI springs from `engine/spring.js` (`ui` in, `uiExit` out, no bounce, opacity never overshoots).
-- **Assets**: the profile's fonts ship with their licence files; `assets.json` lists every file's source and
-  licence; three.js (MIT) ships inside the site.
+- **Assets**: the profile's fonts ship with their license files; `assets.json` lists every file's source and
+  license; three.js (MIT) ships inside the site.
 
 Don't add analytics, chat widgets, ad pixels, embeds, web fonts from a CDN or anything that uploads visitor data
 unless the user asks; when they do, add it through `third_party` so it is consent-gated and named in the policies.

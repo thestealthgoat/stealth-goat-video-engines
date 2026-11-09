@@ -134,7 +134,7 @@ clip = render("deadhead", [shot(0.5) + ",tpad=start_mode=clone:start_duration=1"
 rc, j, log, _ = qa(clip, "--cuts", "1.5")
 expect("nothing moving in the first second is caught", rc == 1 and flagged(j, "hook_motion", 0, 1.0), log)
 
-# explainer freshness (E6): a box drifting with nothing new for 5 s fails; new elements every second pass
+# explainer freshness: a box drifting with nothing new for 5 s fails; new elements every second pass
 bg = "color=c=0x303030:s=1280x720:r=30000/1001:d=5"
 box = "color=c=0xE0E0E0:s=120x120:r=30000/1001:d=5"
 drift = f"{bg}[bg];{box}[box];[bg][box]overlay=x='100+t*80':y=300:shortest=1"

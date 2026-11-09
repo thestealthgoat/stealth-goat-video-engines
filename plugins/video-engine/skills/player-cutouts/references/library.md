@@ -17,7 +17,7 @@ Each photo `<crops>/<name>.jpg` is scaled to fit 3,000 px, then:
 |---|---|
 | `number` | from `numbers.json` (`null` = unreadable, `"MASCOT"`) |
 | `grade` | `A`, `B` or `X` (see below); `override: true` when set by a `name=GRADE` argument |
-| `iou` | agreement of the two masks around the kept player (portrait mask limited to his neighbourhood) |
+| `iou` | agreement of the two masks around the kept player (portrait mask limited to his neighborhood) |
 | `soft_edge` | share of semi-transparent pixels (alpha 26-229) against solid ones |
 | `parts` | solid pieces larger than 1% of the cutout |
 | `cut` | edges the cutout touches: `top`, `left`, `right`, `bottom` |
@@ -44,10 +44,10 @@ Edge tests: more than 1% of the top row, 3% of a side column or 2% of the bottom
 | `_Unidentified/Cutouts/`, `_Unidentified/Photos/` | unreadable or off-roster numbers (`unknown` in the file name) |
 | `_Mascot/Cutouts/` | `MASCOT` entries (no full-res copy) |
 | `_index.csv` | `player, number, grade, cutout, source_raw, game, size, full_body, mask_agreement`; an existing index keeps its own header |
-| `_Overview.jpg` | every filed cutout on the profile's primary colour, labelled with folder and grade |
+| `_Overview.jpg` | every filed cutout on the profile's primary color, labeled with folder and grade |
 | `../lib_plan.json` | next to the library folder: the copies `copy_photos.py` makes (`src` crop name, `dst` library path) |
 
-`source_raw` is recorded as `<name>.CR3` whatever the source camera; it is how a re-run recognises photos already
+`source_raw` is recorded as `<name>.CR3` whatever the source camera; it is how a re-run recognizes photos already
 filed. Use the same photo names on later runs so nothing is filed twice.
 
 File names: characters `" \ / : * ? < > |` are removed and runs of spaces collapse, so an empty `team.home_abbr`

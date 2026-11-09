@@ -1,6 +1,6 @@
 ---
 name: matte
-description: Cuts the people out of a video shot (talking head, presenter, interview, podcast camera, vlog selfie, single-player camera) as a clean, steady alpha matte for compositing, with the free local engine/matte.py (BiRefNet via rembg; nothing is uploaded). Writes a ProRes 4444 alpha .mov, a greyscale matte .mp4, a preview on a brand background and an edge-flicker report. Use when the user says "cut the person out of this video", "remove the background from my clip", "matte the speaker", "rotoscope this", "green-screen without a green screen", "put text behind me", "cards orbiting the presenter", "replace the background behind the speaker", or "make an alpha of the person".
+description: Cuts the people out of a video shot (talking head, presenter, interview, podcast camera, vlog selfie, single-player camera) as a clean, steady alpha matte for compositing, with the free local engine/matte.py (BiRefNet via rembg; nothing is uploaded). Writes a ProRes 4444 alpha .mov, a grayscale matte .mp4, a preview on a brand background and an edge-flicker report. Use when the user says "cut the person out of this video", "remove the background from my clip", "matte the speaker", "rotoscope this", "green-screen without a green screen", "put text behind me", "cards orbiting the presenter", "replace the background behind the speaker", or "make an alpha of the person".
 ---
 
 # Person matte from video
@@ -15,8 +15,8 @@ background), not a finished video.
 1. Use `$VIDEO_ENGINE` (a clone of https://github.com/thestealthgoat/stealth-goat-video-engines). Run every command
    as `cd "$VIDEO_ENGINE" && python3 engine/<tool>.py ...`.
 2. If `$VIDEO_ENGINE` is unset or the folder has no `engine/matte.py`, ask the user where the engine folder is, or
-   set it up: `git clone https://github.com/thestealthgoat/stealth-goat-video-engines`, then `./setup.sh` inside it,
-   then `export VIDEO_ENGINE=<that folder>` (the getting-started skill walks through this). `setup.sh` targets macOS
+   set it up: `git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine`, then `./setup.sh` inside it,
+   then `export VIDEO_ENGINE="$HOME/video-engine"` (the getting-started skill walks through this). `setup.sh` targets macOS
    with Homebrew; on other systems see the platform note in the getting-started skill. Do not guess a path.
 3. Pick the profile: `--profile <name>` on every command, else `$VIDEO_PROFILE`, else `default_profile` in the
    engine folder's `local.json`. The engine ships a `demo` profile for trying things (`python3 engine/vprofile.py list`
@@ -115,12 +115,12 @@ portrait phone clip stays 1080 wide. Outputs in `--out`:
 
 | File | What it is |
 |---|---|
-| `<name>_matte_Alpha.mov` | ProRes 4444 with alpha: the person in original colours, edge colour taken from the person, not the old background. Drop it on top of anything. |
-| `<name>_matte.mp4` | the alpha as greyscale (white = person), for any compositor's luma matte |
-| `<name>_matte_preview.mp4` | the cut-out over `--bg` (default `profile`: the profile's `primary_deep`, else `primary` colour) |
+| `<name>_matte_Alpha.mov` | ProRes 4444 with alpha: the person in original colors, edge color taken from the person, not the old background. Drop it on top of anything. |
+| `<name>_matte.mp4` | the alpha as grayscale (white = person), for any compositor's luma matte |
+| `<name>_matte_preview.mp4` | the cut-out over `--bg` (default `profile`: the profile's `primary_deep`, else `primary` color) |
 | `<name>_matte.json` | settings, frame count, size, fps, and the edge-flicker numbers |
 
-`--bg` takes `profile`, a hex colour in quotes (`'#101820'`), an image path, `blur` (the shot itself blurred) or
+`--bg` takes `profile`, a hex color in quotes (`'#101820'`), an image path, `blur` (the shot itself blurred) or
 `none` (also falls back to the blurred shot in the preview). It only affects the preview.
 
 ## 5. Check before handing it over

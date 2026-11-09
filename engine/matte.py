@@ -175,7 +175,7 @@ def make_bg(mode, P, rgb_shape):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="O2 person matte from video")
+    ap = argparse.ArgumentParser(description="person matte from video")
     ap.add_argument("video"); ap.add_argument("--out", required=True); ap.add_argument("--name")
     ap.add_argument("--t0", type=float, default=0.0); ap.add_argument("--t1", type=float)
     ap.add_argument("--model", default="birefnet-general", choices=["birefnet-general", "birefnet-portrait", "modnet", "u2net_human_seg"])

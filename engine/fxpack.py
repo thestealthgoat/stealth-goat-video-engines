@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""fxpack.py - cinematic edit pack (X2): flash cuts, zoom punches with radial blur, RGB split, speed ramps, whip pans,
-black and white with a colour pop, kinetic text. Every effect is placed on the H1 bar map (engine/beatmap.py) and
-must pass the H3 gate: it needs a music event (a beat, downbeat, hit, riser or the drop) within one frame AND a
-reason measured in the picture (the motion it follows, the colour it keeps, the side the action is not on).
+"""fxpack.py - cinematic edit pack: flash cuts, zoom punches with radial blur, RGB split, speed ramps, whip pans,
+black and white with a color pop, kinetic text. Every effect is placed on the bar map (engine/beatmap.py) and
+must pass the gate: it needs a music event (a beat, downbeat, hit, riser or the drop) within one frame AND a
+reason measured in the picture (the motion it follows, the color it keeps, the side the action is not on).
 An effect with no cause in both is decorative and the render stops (exit 3) and lists it.
 
 fxpack.py <plan.json> --out DIR [--name N] [--profile P] [--fps 29.97] [--size 1920x1080] [--frames t1,t2] [--plan-only]
@@ -212,7 +212,7 @@ def auto_fx(tl, events, plan, fps, P):
         # black and white keeping the hero's own colour
         if sh["hero"] and sh["an"]["hue"] is not None and sh["an"]["hue_share"] > 0.05:
             fx.append({"type": "pop", "at": sh["start"], "until": sh["end"], "hue": sh["an"]["hue"] * 2, "event": "drop" if drop is not None else "downbeat",
-                       "reason": f"keeps the action's own colour (hue {sh['an']['hue'] * 2} deg, {100 * sh['an']['hue_share']:.0f}% of what moves)"})
+                       "reason": f"keeps the action's own color (hue {sh['an']['hue'] * 2} deg, {100 * sh['an']['hue_share']:.0f}% of what moves)"})
     # whips are the loudest transition: keep the two strongest pans, never on neighbouring cuts (no repeated wipes)
     wh = sorted([e for e in fx if e["type"] == "whip"], key=lambda e: -float(e["reason"].split(" px")[0].split()[-1]))
     keep = []
@@ -485,7 +485,7 @@ def main(argv=None):
     json.dump(report, open(jp, "w"), indent=1)
     if bad:
         for e, w in bad:
-            print(f"H3 gate: {e['type']} at {e['at']:.3f} s - {w}", file=sys.stderr)
+            print(f"gate: {e['type']} at {e['at']:.3f} s - {w}", file=sys.stderr)
         print(f"fxpack: {len(bad)} decorative effect(s); nothing rendered (see {jp})", file=sys.stderr)
         return 3
     cuts = [s["start"] for s in tl[1:]]

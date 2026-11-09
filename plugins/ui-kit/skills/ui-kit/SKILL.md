@@ -1,11 +1,11 @@
 ---
 name: ui-kit
-description: Applies a small, opinionated design kit to any app or website UI (plain HTML/CSS, React, Vue, Svelte, Tailwind, Electron, desktop web views). Covers brand colour tokens with measured contrast in light and dark themes, a type scale, spacing, radius, shadow and focus tokens, accessible components (buttons, inputs, selects, checkboxes, cards, tables, toasts, dialogs), spring motion for UI transitions (about 0.2 s, no bounce, opacity never overshoots), and an accessibility and honest-design checklist. Verifies the result in a real browser (Playwright screenshots, keyboard tab-through, pixel-measured contrast). Use when the user says "apply the UI kit to this app", "make our app's colours accessible", "add focus states", "fix the contrast", "make the UI on-brand", "style this form", "add dark mode", "make the buttons and inputs consistent", "make the animations feel snappier", or "check my app for accessibility".
+description: Applies a small, opinionated design kit to any app or website UI (plain HTML/CSS, React, Vue, Svelte, Tailwind, Electron, desktop web views). Covers brand color tokens with measured contrast in light and dark themes, a type scale, spacing, radius, shadow and focus tokens, accessible components (buttons, inputs, selects, checkboxes, cards, tables, toasts, dialogs), spring motion for UI transitions (about 0.2 s, no bounce, opacity never overshoots), and an accessibility and honest-design checklist. Verifies the result in a real browser (Playwright screenshots, keyboard tab-through, pixel-measured contrast). Use when the user says "apply the UI kit to this app", "make our app's colors accessible", "add focus states", "fix the contrast", "make the UI on-brand", "style this form", "add dark mode", "make the buttons and inputs consistent", "make the animations feel snappier", or "check my app for accessibility".
 ---
 
 # UI kit
 
-Restyle an existing app with the kit's tokens and components, measure every colour pair, wire spring motion
+Restyle an existing app with the kit's tokens and components, measure every color pair, wire spring motion
 for UI transitions, and prove the result in a real browser. The kit is the engine's website kit
 (`web/kit/site.css`, `web/kit/site.js`, the `palette()` in `web/build.py`, `engine/spring.js` and the
 `web/compliance.py` gate) cut down for any app.
@@ -16,13 +16,13 @@ instead; never run a command as `/scripts/...` or `/references/...`. Its files:
 
 | File | What it is |
 |------|------------|
-| [references/tokens.css](references/tokens.css) | CSS custom properties: colours (light + dark), type scale, spacing, radius, shadow, focus ring, motion |
+| [references/tokens.css](references/tokens.css) | CSS custom properties: colors (light + dark), type scale, spacing, radius, shadow, focus ring, motion |
 | [references/components.css](references/components.css) | `ui-` classes: buttons, fields, select, checkbox/radio, cards, tables, badges, toasts, dialog, skip link, reduced motion |
 | [references/spring.js](references/spring.js) | the engine's `spring.js`, unchanged (presets `ui` and `uiExit` for UI) |
 | [references/ui-motion.js](references/ui-motion.js) | `UIMotion.enter / exit / disclose / openDialog / closeDialog / toast` on those springs |
 | [references/checklist.md](references/checklist.md) | the accessibility + honest-design checklist, with how each item is checked |
 | [references/example/](references/example/) | the worked example: `before.html` (a plain form) and `after.html` (the kit applied) |
-| `scripts/palette.py` | brand colours to tokens with measured contrast (`make`), the measuring check (`check`), one pair (`ratio`) |
+| `scripts/palette.py` | brand colors to tokens with measured contrast (`make`), the measuring check (`check`), one pair (`ratio`) |
 | `scripts/ui_check.py` | real-browser check: Tab reach + focus rings, pixel contrast, phone width, labels, pre-ticked boxes, dark-pattern wording, reduced motion; screenshots |
 
 ## 0. Set up
@@ -30,15 +30,15 @@ instead; never run a command as `/scripts/...` or `/references/...`. Its files:
 1. Need `python3`. For the browser check, need Playwright with Chromium:
    `python3 -c "import playwright"`; if missing, ask before installing, then run
    `python3 -m pip install playwright pillow numpy && python3 -m playwright install chromium`.
-2. Brand colours come from the user (two hex values: a primary and an accent), or from a brand profile in the
+2. Brand colors come from the user (two hex values: a primary and an accent), or from a brand profile in the
    video engine folder. Without the engine, use `--primary` / `--accent`, or `--profile-json` on any profile.json;
    everything else in this skill works without it. For a profile by name, use `$VIDEO_ENGINE`. If it is unset and the
-   user wants their profile's colours, ask where the engine folder is; if they have none, set it up (the
+   user wants their profile's colors, ask where the engine folder is; if they have none, set it up (the
    `setup.sh` script targets macOS with Homebrew):
    ```
-   git clone https://github.com/thestealthgoat/stealth-goat-video-engines
-   cd stealth-goat-video-engines && ./setup.sh
-   export VIDEO_ENGINE="$PWD"
+   git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine
+   cd ~/video-engine && ./setup.sh
+   export VIDEO_ENGINE="$HOME/video-engine"
    ```
    (The getting-started skill walks through the same setup, but it is in the separate video-engine plugin, so it is
    only there when that plugin is installed too.) Profiles: `--profile <name>`, else `$VIDEO_PROFILE`, else
@@ -52,7 +52,7 @@ instead; never run a command as `/scripts/...` or `/references/...`. Its files:
 
 1. Find where styles live: global CSS files, CSS modules, Tailwind config (`tailwind.config.*` or `@theme` in CSS),
    CSS-in-JS theme objects, an Electron renderer's stylesheet. Note the framework and how styles are loaded.
-2. Inventory the ad-hoc values. Colours:
+2. Inventory the ad-hoc values. Colors:
    `grep -rhoE '#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)' src | sort | uniq -c | sort -rn`
    (point it at the real source folders; skip `node_modules`, builds and vendored files). Do the same for
    `font-size`, `border-radius`, `box-shadow`, `transition` and `outline: none`.
@@ -67,7 +67,7 @@ instead; never run a command as `/scripts/...` or `/references/...`. Its files:
 1. Copy the kit into the app, beside its other styles (for example `src/styles/ui-kit/`):
    `tokens.css` and `components.css` always; `spring.js` and `ui-motion.js` when the app needs JS-driven
    enter/exit motion. Load `tokens.css` before `components.css`, both before the app's own CSS.
-2. Generate the colour block from the brand and write it into the copied `tokens.css`:
+2. Generate the color block from the brand and write it into the copied `tokens.css`:
    - `python3 "${CLAUDE_PLUGIN_ROOT}/skills/ui-kit/scripts/palette.py" make --primary "#2348b8" --accent "#d9480f" --write src/styles/ui-kit/tokens.css`
    - from an engine profile (needs `$VIDEO_ENGINE`, see step 0): `python3 "${CLAUDE_PLUGIN_ROOT}/skills/ui-kit/scripts/palette.py" make --profile demo --write src/styles/ui-kit/tokens.css`
    - from any `profile.json`: `--profile-json path/to/profile.json` (reads `brand.colors.primary / accent / text`).
@@ -77,9 +77,9 @@ instead; never run a command as `/scripts/...` or `/references/...`. Its files:
    forces it.
 3. Measure it: `python3 "${CLAUDE_PLUGIN_ROOT}/skills/ui-kit/scripts/palette.py" check src/styles/ui-kit/tokens.css`. Every pair must say `ok`, and the last line reads
    `palette check: N/N pairs pass` (with `, K FAIL` added when any fail; it then exits 1).
-   If the user insists on an exact brand colour that fails (a yellow link on white), keep the brand colour for fills
+   If the user insists on an exact brand color that fails (a yellow link on white), keep the brand color for fills
    and large display text only, and say which pairs it fails and by how much.
-4. Fonts: keep the app's fonts unless asked. When adding a brand face, self-host it with its licence file
+4. Fonts: keep the app's fonts unless asked. When adding a brand face, self-host it with its license file
    (OFL fonts ship `OFL-<Family>.txt`), declare it with `@font-face` and `font-display: swap`, and put it first in
    `--font-body` / `--font-head`. Do not add a font CDN request.
 5. Leave the type scale, spacing, radius, shadow and motion tokens as they are unless the app's existing scale is
@@ -101,9 +101,9 @@ Roles to map onto (full list in `tokens.css`):
 ## 3. Replace the ad-hoc values
 
 1. Work one screen or component at a time. Replace each literal with its token (`color: #333` becomes
-   `color: var(--color-text)`). Do not change layout, copy or behaviour beyond what the user asked.
+   `color: var(--color-text)`). Do not change layout, copy or behavior beyond what the user asked.
 2. Framework notes:
-   - Tailwind: point the theme colours at the variables (`primary: 'var(--color-action)'`, and so on) instead of
+   - Tailwind: point the theme colors at the variables (`primary: 'var(--color-action)'`, and so on) instead of
      hex values, so dark mode and contrast come from `tokens.css`.
    - CSS-in-JS / theme objects: set the theme values to `'var(--color-text)'` strings.
    - Existing component libraries: set their theme variables to the kit tokens rather than restyling each part.
@@ -118,7 +118,7 @@ Roles to map onto (full list in `tokens.css`):
 6. Forms: visible labels (a placeholder is a hint only), "(optional)" on optional fields, errors in words next to
    the field with `aria-describedby` and `aria-invalid="true"`, focus moved to the first error, consent and
    marketing boxes unticked and separate. See the worked example.
-7. Honest design: the "no" button gets the same size and weight as the "yes" (`ui-btn--secondary`, never a grey
+7. Honest design: the "no" button gets the same size and weight as the "yes" (`ui-btn--secondary`, never a gray
    link); remove confirm-shaming, fake urgency, countdowns and pre-ticked boxes. Rules: [references/checklist.md](references/checklist.md).
 
 ## 4. Measure contrast; never judge it by eye
@@ -138,7 +138,7 @@ Use the engine's springs, not ease-in-out curves. For UI only `ui` (`{zeta: 1, o
 0.20 s) and `uiExit` (`{zeta: 1, omega: 46}`, about 0.16 s): both critically damped, so nothing bounces. The
 `snappy`, `bouncy` and `slam` presets in `spring.js` are for video graphics, not app UI.
 
-1. State changes (hover, pressed, selected, colour changes): CSS transitions with the tokens:
+1. State changes (hover, pressed, selected, color changes): CSS transitions with the tokens:
    `transition: background-color var(--dur-hover) var(--ease-spring)` and `var(--dur-ui)` for movement.
    `--ease-spring` is the `ui` spring sampled into CSS `linear()`, with a close `cubic-bezier` fallback.
 2. Things that appear and disappear (menus, popovers, dialogs, toasts): load `spring.js` then `ui-motion.js` and use
@@ -172,15 +172,15 @@ Use the engine's springs, not ease-in-out curves. For UI only `ui` (`{zeta: 1, o
 ## Worked example: style a plain HTML form
 
 `references/example/before.html` is a typical ad-hoc contact form: placeholders instead of labels, `outline: none`,
-grey hint text at 2.2:1, an orange button with white text at 2.0:1, a fixed 520 px width, a pre-ticked "Send me
+gray hint text at 2.2:1, an orange button with white text at 2.0:1, a fixed 520 px width, a pre-ticked "Send me
 offers" box and a confirm-shaming "No thanks" link. `references/example/after.html` is the same form with the kit.
 
 1. Check the "before":
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/ui-kit/scripts/ui_check.py" "${CLAUDE_PLUGIN_ROOT}/skills/ui-kit/references/example/before.html" --out /tmp/ui-before`
-   It FAILs on: four unlabelled fields, the pre-ticked box, three contrast pairs, no focus style on six controls,
+   It FAILs on: four unlabeled fields, the pre-ticked box, three contrast pairs, no focus style on six controls,
    188 px of sideways scroll on a phone, confirm-shaming wording; and notes the missing skip link.
 2. The changes that make up `after.html`:
-   - `tokens.css` + `components.css` linked; every colour is a token.
+   - `tokens.css` + `components.css` linked; every color is a token.
    - a skip link and `<main id="main">`;
    - each field in a `ui-field` with a `<label for>`, the hint as `ui-hint` linked by `aria-describedby`, "(optional)"
      on the topic, `autocomplete` and `type="email"`;
@@ -205,6 +205,6 @@ offers" box and a confirm-shaming "No thanks" link. `references/example/after.ht
 
 ## Report back
 
-Tell the user, briefly: which files changed, the colour mapping (old value to token), the `palette.py check` and
+Tell the user, briefly: which files changed, the color mapping (old value to token), the `palette.py check` and
 `ui_check.py` results with the screenshot folder, anything that still fails and why (for example an exact brand
-colour they chose to keep), and the checklist rows that need their decision (copy, claims, consent wording).
+color they chose to keep), and the checklist rows that need their decision (copy, claims, consent wording).

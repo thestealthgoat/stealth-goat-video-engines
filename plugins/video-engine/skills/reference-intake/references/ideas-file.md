@@ -11,7 +11,7 @@ existing rows.
 # Reference ideas
 
 Videos and sites I like, what makes them work, and what to build from them with the video engine.
-IDs: engine IDs (E1, O4, W2 ...) are tools that already exist; N1, N2 ... are new features.
+Ideas the engine already covers are logged by tool name (e.g. `stage3d.py orbit`); N1, N2 ... are new features.
 
 ## Build order
 
@@ -38,7 +38,7 @@ IDs: engine IDs (E1, O4, W2 ...) are tools that already exist; N1, N2 ... are ne
 | Reference | creator and a link or the local file name, e.g. `@janedoe (TikTok), glass-cards.mov` |
 | Category | motion graphic, logo, explainer, talking head, product promo, website, method or tool |
 | What makes it work | one or two sentences with at least one measured number (cuts per second, BPM, longest hold, palette) |
-| Ideas | the IDs it matched or created, e.g. `O4, P2, N3 (new)` |
+| Ideas | the tools it matched and the idea IDs it created, e.g. `stage3d orbit, stage3d burst, N3 (new)` |
 
 **Ideas** (one row per idea, new ones only):
 
@@ -58,11 +58,11 @@ something, a short note in "How to build". Do not add a duplicate row.
 ## Example rows
 
 ```markdown
-| 2026-11-09 | @janedoe (TikTok), glass-cards.mov | product promo | 14 cuts in 23 s, every cut on a beat at 120 BPM; the reveal lands on the drop at 12 s; glass cards pass behind the presenter | O4, P2, N3 (new) |
+| 2026-11-09 | @janedoe (TikTok), glass-cards.mov | product promo | 14 cuts in 23 s, every cut on a beat at 120 BPM; the reveal lands on the drop at 12 s; glass cards pass behind the presenter | stage3d orbit, stage3d burst, N3 (new) |
 ```
 
 ```markdown
-| N3 | Frosted glass on the orbit cards: blur and refraction of the presenter through the card | stage3d.py orbit + a transmission / roughness material like the W5 glass; needs a card material option | M | ACME launch promo | idea | 2026-11-09 |
+| N3 | Frosted glass on the orbit cards: blur and refraction of the presenter through the card | stage3d.py orbit + a transmission / roughness material like the glass in the `w5` site template; needs a card material option | M | ACME launch promo | idea | 2026-11-09 |
 ```
 
 ## Build order

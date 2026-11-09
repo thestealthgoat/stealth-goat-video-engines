@@ -209,7 +209,7 @@ def check(sb, base_dir, max_scene=2.5):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="E2 explainer storyboard tools")
+    ap = argparse.ArgumentParser(description="explainer storyboard tools")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("pace"); p.add_argument("sb"); p.add_argument("--wps", type=float, default=2.6)
     p.add_argument("--min", type=float, default=1.6); p.add_argument("--pad", type=float, default=0.45)

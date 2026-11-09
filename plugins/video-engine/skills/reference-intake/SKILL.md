@@ -1,6 +1,6 @@
 ---
 name: reference-intake
-description: Breaks down a video or website the user likes (a screen recording, a clip, or a link) into what makes it work (structure, timing, motion, type, colour), maps each idea to a video engine tool or notes it as a new feature, and keeps a running ideas list in a file the user names (default REFERENCE_IDEAS.md in the engine folder). Use when the user says "this is fire", "more inspo", "I love this", "how did they make this", "break this down", "steal this idea", "can we do this", "add this to my ideas", "reference for the next video", or drops a TikTok / Reel / YouTube clip, a screen recording, or a website link they admire.
+description: Breaks down a video or website the user likes (a screen recording, a clip, or a link) into what makes it work (structure, timing, motion, type, color), maps each idea to a video engine tool or notes it as a new feature, and keeps a running ideas list in a file the user names (default REFERENCE_IDEAS.md in the engine folder). Use when the user says "this is fire", "more inspo", "I love this", "how did they make this", "break this down", "steal this idea", "can we do this", "add this to my ideas", "reference for the next video", or drops a TikTok / Reel / YouTube clip, a screen recording, or a website link they admire.
 ---
 
 # Reference intake
@@ -12,9 +12,9 @@ ideas file. Study only: never copy someone's design to ship.
 ## 0. Find the engine and the ideas file
 
 - Use `$VIDEO_ENGINE` as the engine folder. If it is unset, ask the user where the engine is, or set it up (the
-  getting-started skill walks through it): `git clone https://github.com/thestealthgoat/stealth-goat-video-engines`,
-  `cd stealth-goat-video-engines && ./setup.sh` (setup.sh targets macOS with Homebrew), then
-  `export VIDEO_ENGINE="$PWD"`.
+  getting-started skill walks through it): `git clone https://github.com/thestealthgoat/stealth-goat-video-engines.git ~/video-engine`,
+  `cd ~/video-engine && ./setup.sh` (setup.sh targets macOS with Homebrew), then
+  `export VIDEO_ENGINE="$HOME/video-engine"`.
 - Run every command as `cd "$VIDEO_ENGINE" && python3 engine/<tool>.py ...`. Tools that take a brand take
   `--profile <name>` (else `$VIDEO_PROFILE`, else `local.json`); the measuring tools below (beatmap, qa, captions)
   need one too, for their delivery settings. `python3 engine/vprofile.py list` shows the profiles. Use the user's
@@ -99,7 +99,7 @@ Write five short answers, in plain words, from what was seen and measured:
    `slam`, `smooth`, `gentle`, `ui`) from the measured settle and overshoot when you fitted one.
 4. **Type**: typeface class (condensed sans, serif pull-quote, mono), size against the frame, case, how words appear
    (word by word on speech, one keyword boxed, kinetic swaps).
-5. **Colour and light**: the palette hex values from `probe`, ground (dark, gradient, mesh, footage), accent use,
+5. **Color and light**: the palette hex values from `probe`, ground (dark, gradient, mesh, footage), accent use,
    glow, grain, depth of field.
 
 Then add the creator, the category (motion graphic, logo, explainer, talking head, product promo, website,
@@ -114,7 +114,7 @@ which measurement answers it.
 
 Make the call; do not ask the user to choose.
 
-- Look the idea up in [references/tool-map.md](references/tool-map.md) (technique to tool, engine ID and a working
+- Look the idea up in [references/tool-map.md](references/tool-map.md) (technique to tool and a working
   command). Check the ideas file too: if an earlier entry already covers it, log the reference against that entry
   and note only what is new.
 - **Covered by a tool**: name the tool, the template or scene, and the flags that get closest. Say honestly what
@@ -140,7 +140,7 @@ Rules for every idea:
 ## 6. Optional: a quick proof still
 
 When a mapped tool can show the idea in one frame, render a still (never a full render during intake) and `Read`
-it, so the user sees it in their colours:
+it, so the user sees it in their colors:
 
 ```bash
 python3 engine/stage3d.py burst $R/proof Proof --lines "ONE|TWO|THREE" --frames 1.0 --profile demo
@@ -158,7 +158,7 @@ Edit in place; never rewrite or reorder other entries. Formats are in
 [references/ideas-file.md](references/ideas-file.md).
 
 - Append one row to **Reference log**: Date | Reference (creator, link or file) | Category | What makes it work |
-  Ideas (IDs).
+  Ideas (the tools it matched, the new idea IDs).
 - Append new ideas as rows in **Ideas**: ID | Idea | How to build | Size | Fits | Status | From.
 - For an idea already listed, add the new reference to its "From" cell and a short note of what is new.
 - If this reference changes what to build first, edit the **Build order** list (move, add or drop one line).
@@ -166,7 +166,7 @@ Edit in place; never rewrite or reorder other entries. Formats are in
 
 ## 8. Reply
 
-Two to five lines: what makes it work (with one number), the ID(s) it became or matched, the tool it maps to,
+Two to five lines: what makes it work (with one number), the tool it maps to or the new idea ID it became,
 where it fits the user's work, and any build-order change. Give the ideas file path. No recap of the file.
 
 ## Worked example
@@ -184,10 +184,10 @@ python3 engine/stage3d.py burst $R/proof Proof --lines "FAST|LOCAL|YOURS" --fram
 
 Findings: 14 cuts in 23 s, every cut on a beat at 120 BPM, the product reveal on the drop at 12.0 s; glass cards
 orbit a presenter and pass behind them; dark mesh-gradient ground, one warm accent. Mapping: glass cards around a
-person = `stage3d.py orbit` with a `matte.py` matte (O4, covered); title swaps behind light bursts =
-`stage3d.py burst` (P2, covered); the cards' frosted refraction is a gap, logged as N3 "frosted glass on orbit
+person = `stage3d.py orbit` with a `matte.py` matte (covered); title swaps behind light bursts =
+`stage3d.py burst` (covered); the cards' frosted refraction is a gap, logged as N3 "frosted glass on orbit
 cards" (M). Log row and idea row appended, N3 placed second in Build order.
 
 Reply: "Cuts on every beat (14 in 23 s) and the reveal lands on the drop at 12 s; the glass cards pass behind the
-presenter. Matches O4 orbit + P2 burst; new N3: frosted glass on the orbit cards (M). Fits your product launch
+presenter. Matches `stage3d.py orbit` + `stage3d.py burst`; new N3: frosted glass on the orbit cards (M). Fits your product launch
 promo. N3 is now second in the build order. Logged in REFERENCE_IDEAS.md."

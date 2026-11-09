@@ -1,0 +1,27 @@
+{
+  "about": "Sample input for engine/stage3d.py data. Every number is made up (the fictional Harbor City Otters). Sections play in order: bars (label + value), cards (2-4 count-up score cards, optional note), points (a point cloud / map).",
+  "sections": [
+    {
+      "kind": "bars",
+      "title": "Points per game",
+      "note": "Harbor City Otters, first six games",
+      "items": [
+        {"label": "Game 1", "value": 21},
+        {"label": "Game 2", "value": 28},
+        {"label": "Game 3", "value": 17},
+        {"label": "Game 4", "value": 35},
+        {"label": "Game 5", "value": 24},
+        {"label": "Game 6", "value": 31}
+      ]
+    },
+    {
+      "kind": "cards",
+      "title": "Season so far",
+      "items": [
+        {"label": "Wins", "value": 5, "note": "of 6 games"},
+        {"label": "Yards per game", "value": 342.5},
+        {"label": "Viewers", "value": 48200, "note": "live and replay"}
+      ]
+    }
+  ]
+}

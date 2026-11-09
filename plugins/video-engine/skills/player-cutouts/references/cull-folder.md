@@ -8,7 +8,7 @@ photo-folder route in SKILL.md instead.
 <cull dir>/
   rows.json            {"rows": [ {...}, ... ]}
   prev960/<n>.jpg      a preview of each photo, about 960 px, as stored (not rotated)
-  masks/<n>.png        a greyscale person mask of the preview AFTER rotating it upright (white = person, > 128)
+  masks/<n>.png        a grayscale person mask of the preview AFTER rotating it upright (white = person, > 128)
 ```
 
 One row per photo. `n`, `keep`, `o`, `burst`, `folder` and `cat` are all required: `candidates` reads each one

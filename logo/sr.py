@@ -1,6 +1,8 @@
 """x4 AI super-resolution (EDSR) — run with srenv/bin/python (opencv-contrib 4.x). sr.py in.png out.png"""
 import sys, os, cv2
 here = os.path.dirname(os.path.abspath(__file__))
+if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):   # usage before anything runs
+    print(__doc__); sys.exit(0)
 sr = cv2.dnn_superres.DnnSuperResImpl_create()
 img = cv2.imread(sys.argv[1])
 big = max(img.shape[:2]) > 600
